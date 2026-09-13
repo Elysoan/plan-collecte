@@ -78,9 +78,13 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .btn-sm.danger{background:#fff0f0;color:#c0392b;border-color:#f5c6c6;}
 .btn-sm.danger:hover{background:#ffe0e0;}
 
-.plan-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;overflow:hidden;transition:all .15s;cursor:default;}
+.plan-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;overflow:hidden;transition:border-color .15s,box-shadow .15s;cursor:default;}
 .plan-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
 .plan-card.editing{border-color:#f39c12;box-shadow:0 0 0 3px #fef9e7;}
+.plan-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
+.plan-card.dragging{opacity:.4;}
+.drag-handle{cursor:grab;color:var(--muted);font-size:13px;padding:2px 2px;flex-shrink:0;letter-spacing:-1px;}
+.drag-handle:active{cursor:grabbing;}
 
 .plan-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;}
 .plan-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;cursor:pointer;}
@@ -215,6 +219,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .pp-brand span{display:block;font-size:6pt;font-weight:600;color:#888;letter-spacing:.04em;}
 .print-page.orient-portrait .pp-credits,.print-page.orient-portrait .pp-legend{border-right:none;}
 
+.pp-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:450;overflow:hidden;}
+.pp-watermark span{font-size:46pt;font-weight:800;color:rgba(0,90,158,.09);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;transform:rotate(-22deg);}
+
 @media print{
   .print-page{position:static;page-break-after:always;}
   .print-page:last-child{page-break-after:avoid;}
@@ -230,6 +237,18 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .gen-box p{font-size:.82rem;color:var(--muted);margin-bottom:14px;}
 .gen-prog-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
 .gen-prog-fill{height:100%;background:var(--navy);border-radius:3px;transition:width .4s;}
+
+/* Reprise de session */
+#restore-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;}
+#restore-overlay.show{display:flex;}
+.restore-box{background:white;border-radius:12px;padding:26px 32px;text-align:center;max-width:360px;box-shadow:0 12px 40px rgba(0,0,0,.25);}
+.restore-box h3{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:8px;}
+.restore-box p{font-size:.82rem;color:var(--muted);margin-bottom:18px;line-height:1.5;}
+.restore-box .row{display:flex;gap:8px;}
+.restore-box .row button{flex:1;}
+
+.hdr-reset{background:none;border:1px solid rgba(255,255,255,.35);color:white;font-size:.7rem;padding:4px 10px;border-radius:6px;cursor:pointer;margin-left:12px;flex-shrink:0;}
+.hdr-reset:hover{background:rgba(255,255,255,.15);}
 </style>
 </head>
 <body>
@@ -241,8 +260,21 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <circle cx="10" cy="5" r="1.5" fill="white"/>
   </svg>
   <h1>Plans de collecte</h1>
-  <p>A3 paysage · Fond OSM · Offset latéral</p>
+  <p>A3 paysage/portrait auto · Fond OSM · Offset latéral</p>
+  <button class="hdr-reset" id="hdr-reset-btn" style="display:none" onclick="startOver()" title="Effacer la session en cours et repartir de zéro">🗑 Nouvelle session</button>
 </header>
+
+<!-- Reprise de session -->
+<div id="restore-overlay">
+  <div class="restore-box">
+    <h3>Reprendre la session en cours ?</h3>
+    <p id="restore-msg">Un travail non terminé a été retrouvé.</p>
+    <div class="row">
+      <button class="btn-sm" onclick="discardSession()">Nouvelle session</button>
+      <button class="btn-sm primary" onclick="restoreSession()">↻ Reprendre</button>
+    </div>
+  </div>
+</div>
 
 <div class="app">
 
@@ -284,7 +316,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
         <button class="btn-sm" onclick="mergeAll()" title="Regrouper tous les tronçons dans un seul plan">⛙ Fusionner</button>
       </div>
 
-      <p class="hint" id="plans-hint">Découpage automatique appliqué à l'import. Ajustez par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong>, ou <strong>⚡ Auto</strong> / <strong>⛙ Fusionner</strong> pour repartir de zéro. L'orientation (paysage/portrait) de chaque plan est détectée automatiquement selon l'emprise des tronçons.</p>
+      <p class="hint" id="plans-hint">Découpage automatique appliqué à l'import. Ajustez par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong>, ou <strong>⚡ Auto</strong> / <strong>⛙ Fusionner</strong> pour repartir de zéro. Glissez la poignée <strong>⠿</strong> pour réordonner les plans (ordre = ordre d'impression). L'orientation (paysage/portrait) de chaque plan est détectée automatiquement selon l'emprise des tronçons.</p>
 
       <div id="plans-list"></div>
     </div>
@@ -445,13 +477,99 @@ function clearLogo(){
 refreshLogoUI();
 
 // ═══════════════════════════════════════════════════════
+// SAUVEGARDE DE SESSION (localStorage) — reprise après rechargement/fermeture
+// ═══════════════════════════════════════════════════════
+const SESSION_KEY='pc_session_v1';
+const FIELD_IDS=['f-tournee','f-commune','f-periode','f-jour','f-freq','f-flux','f-semaine','f-saison'];
+let SAVE_TIMER=null, SAVE_BROKEN=false;
+
+function scheduleSave(){
+  if(!RECS.length)return;
+  clearTimeout(SAVE_TIMER);
+  SAVE_TIMER=setTimeout(saveSession,400);
+}
+function saveSession(){
+  if(!RECS.length||SAVE_BROKEN)return;
+  try{
+    const fields={};
+    for(const id of FIELD_IDS)fields[id]=document.getElementById(id)?.value||'';
+    const data={
+      v:1, RECS, CIRCUIT, PCTR, CUR_STEP, OFFSET_PX, fields,
+      PLANS:PLANS.map(p=>({...p,segIds:[...p.segIds]})),
+      opts:{
+        tile:document.getElementById('opt-tile').value,
+        offset:document.getElementById('opt-offset').value,
+        labels:document.getElementById('opt-labels').checked,
+        arrows:document.getElementById('opt-arrows').checked,
+      },
+    };
+    localStorage.setItem(SESSION_KEY,JSON.stringify(data));
+  }catch(e){
+    SAVE_BROKEN=true; // session trop volumineuse ou quota atteint : on arrête d'insister
+    console.warn('Sauvegarde de session désactivée (quota localStorage atteint) :',e);
+  }
+}
+function clearSessionStorage(){
+  try{localStorage.removeItem(SESSION_KEY);}catch(e){}
+}
+function startOver(){
+  if(!confirm('Effacer la session en cours et repartir de zéro ?'))return;
+  clearSessionStorage();
+  location.reload();
+}
+function restoreSession(){
+  const data=window.__SAVED_SESSION;
+  if(!data)return;
+  RECS=data.RECS||[];
+  CIRCUIT=data.CIRCUIT||'';
+  PCTR=data.PCTR||0;
+  OFFSET_PX=data.OFFSET_PX||6;
+  PLANS=(data.PLANS||[]).map(p=>({...p,segIds:new Set(p.segIds)}));
+  for(const [id,val] of Object.entries(data.fields||{})){
+    const el=document.getElementById(id);if(el)el.value=val;
+  }
+  if(data.opts){
+    document.getElementById('opt-tile').value=data.opts.tile||'osm';
+    document.getElementById('opt-offset').value=data.opts.offset||'6';
+    document.getElementById('opt-labels').checked=data.opts.labels!==false;
+    document.getElementById('opt-arrows').checked=data.opts.arrows!==false;
+    setTile(data.opts.tile||'osm');
+  }
+  showInfo(RECS);
+  buildLayers(RECS);
+  renderPlans();refreshColors();
+  document.getElementById('restore-overlay').classList.remove('show');
+  document.getElementById('hdr-reset-btn').style.display='inline-block';
+  goStep(data.CUR_STEP&&data.CUR_STEP>=2?data.CUR_STEP:2);
+}
+function discardSession(){
+  clearSessionStorage();
+  document.getElementById('restore-overlay').classList.remove('show');
+}
+(function checkSavedSession(){
+  try{
+    const raw=localStorage.getItem(SESSION_KEY);
+    if(!raw)return;
+    const data=JSON.parse(raw);
+    if(!data?.RECS?.length)return;
+    window.__SAVED_SESSION=data;
+    document.getElementById('restore-msg').textContent=
+      `Circuit "${data.CIRCUIT||'—'}" — ${data.RECS.length} tronçons, ${(data.PLANS||[]).length} plan(s).`;
+    document.getElementById('restore-overlay').classList.add('show');
+  }catch(e){}
+})();
+FIELD_IDS.forEach(id=>document.getElementById(id)?.addEventListener('input',scheduleSave));
+
+// ═══════════════════════════════════════════════════════
 // CARTE
 // ═══════════════════════════════════════════════════════
 MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
 setTile('osm');
 MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
-document.getElementById('opt-tile').addEventListener('change',e=>setTile(e.target.value));
-document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();});
+document.getElementById('opt-tile').addEventListener('change',e=>{setTile(e.target.value);scheduleSave();});
+document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();scheduleSave();});
+document.getElementById('opt-labels').addEventListener('change',scheduleSave);
+document.getElementById('opt-arrows').addEventListener('change',scheduleSave);
 
 function setTile(k){
   if(TILE_LYR)MAP.removeLayer(TILE_LYR);
@@ -475,6 +593,7 @@ function goStep(n){
     else{lbl.textContent='Suivant →';btn.style.display='none';}
     document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
     if(n!==2)deactivatePlan();
+    scheduleSave();
   }
 }
 function nextStep(){
@@ -510,6 +629,7 @@ async function load(file){
     // Découpage automatique par défaut : des plans prêts à l'emploi dès l'import
     autoSplit();
     goStep(2);
+    document.getElementById('hdr-reset-btn').style.display='inline-block';
   }catch(e){alert('Erreur: '+e.message);console.error(e);}
 }
 
@@ -758,6 +878,7 @@ function renderPlans(){
     d.className='plan-card'+(isActive?' editing':'');
     d.innerHTML=`
 <div class="plan-head" onclick="togglePlanBody(${p.id})">
+  <span class="drag-handle" draggable="true" ondragstart="planDragStart(event,${p.id})" ondragend="planDragEnd(event)" onclick="event.stopPropagation()" title="Glisser pour réordonner">⠿</span>
   <div class="plan-swatch" style="background:${p.color}" onclick="event.stopPropagation();cycleSwatch(${p.id})" title="Changer la couleur"></div>
   <input class="plan-name-inp" value="${p.name}" oninput="gp(${p.id}).name=this.value" onclick="event.stopPropagation()">
   <span class="orient-pill" title="Orientation A3 détectée automatiquement (modifiable dans le détail du plan)">${orient==='landscape'?'▭ Paysage':'▯ Portrait'}</span>
@@ -827,8 +948,35 @@ function renderPlans(){
   </div>
   <button class="btn-sm danger" style="width:100%;justify-content:center;margin-top:8px" onclick="gp(${p.id}).segIds.clear();renderPlans();refreshColors()">🗑 Vider la sélection</button>
 </div>`;
+    d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('drag-over');});
+    d.addEventListener('dragleave',()=>d.classList.remove('drag-over'));
+    d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('drag-over');dropPlanOnto(p.id);});
     list.appendChild(d);
   }
+  scheduleSave();
+}
+
+// ── Réordonnancement des plans par glisser-déposer ──
+let DRAG_PLAN_ID=null;
+function planDragStart(e,id){
+  DRAG_PLAN_ID=id;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',String(id));
+  e.target.closest('.plan-card')?.classList.add('dragging');
+}
+function planDragEnd(e){
+  e.target.closest('.plan-card')?.classList.remove('dragging');
+}
+function dropPlanOnto(targetId){
+  const fromId=DRAG_PLAN_ID;
+  DRAG_PLAN_ID=null;
+  if(fromId==null||fromId===targetId)return;
+  const fromIdx=PLANS.findIndex(p=>p.id===fromId);
+  const toIdx=PLANS.findIndex(p=>p.id===targetId);
+  if(fromIdx<0||toIdx<0)return;
+  const [moved]=PLANS.splice(fromIdx,1);
+  PLANS.splice(toIdx,0,moved);
+  renderPlans();refreshColors();
 }
 
 function togglePlanBody(pid){
@@ -1057,6 +1205,7 @@ async function doPrint(){
 </div>
 <div class="pp-map">
   <div id="pmap-${i}" class="pp-leaflet"></div>
+  ${g('f-commune')?`<div class="pp-watermark"><span>${g('f-commune')}</span></div>`:''}
 </div>
 <div class="pp-footer">
   <div class="pp-credits">
