@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plans de collecte</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* ═══════════════ VARIABLES ═══════════════ */
+:root {
+  --bg:#f4f5f7;--surface:#fff;--border:#e0e4eb;--text:#1c2333;
+  --muted:#7a8499;--accent:#1a56db;--accent-bg:#ebf0fd;
+  --blue:#0078be;--navy:#005a9e;
+  --c-bilat:#e07b00;--c-droite:#1a6e3c;--c-marche:#9b59b6;--c-hlp:#444;
+  --r:8px;--shadow:0 2px 8px rgba(0,0,0,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── HEADER ── */
+header{background:var(--navy);color:white;padding:0 20px;height:48px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,90,.3);}
+header h1{font-size:.95rem;font-weight:700;letter-spacing:.01em;}
+header p{font-size:.72rem;opacity:.65;margin-left:auto;}
+
+/* ── LAYOUT ── */
+.app{display:flex;flex:1;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sb{width:340px;min-width:300px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+
+/* Steps */
+.steps{display:flex;border-bottom:1px solid var(--border);background:var(--bg);}
+.step{flex:1;padding:10px 6px;text-align:center;cursor:pointer;font-size:.72rem;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;transition:all .2s;user-select:none;}
+.step.active{color:var(--accent);border-bottom-color:var(--accent);background:white;}
+.step .step-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--border);color:var(--muted);font-size:.65rem;margin-bottom:3px;}
+.step.active .step-num{background:var(--accent);color:white;}
+.step.done .step-num{background:#27ae60;color:white;}
+.step.done{color:#27ae60;}
+
+.sb-panel{flex:1;overflow-y:auto;padding:16px;display:none;}
+.sb-panel.active{display:block;}
+.sb-foot{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;}
+
+/* ── TYPOGRAPHY ── */
+.sec-title{font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.hint{font-size:.73rem;color:var(--muted);line-height:1.5;margin-bottom:12px;}
+.hint strong{color:var(--text);}
+
+/* ── DROP ZONE ── */
+#dz{border:2px dashed var(--border);border-radius:var(--r);padding:24px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);}
+#dz.over{border-color:var(--accent);background:var(--accent-bg);}
+#dz input{display:none;}
+#dz .dz-icon{font-size:2rem;margin-bottom:8px;}
+#dz h4{font-size:.88rem;font-weight:600;margin-bottom:4px;}
+#dz p{font-size:.75rem;color:var(--muted);}
+.dz-btn{margin-top:12px;background:var(--accent);color:white;padding:7px 18px;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;border:none;display:inline-block;}
+
+/* ── INFO BOX ── */
+#info-box{display:none;background:#f0faf0;border:1px solid #b2dfb2;border-radius:var(--r);padding:10px 14px;font-size:.8rem;margin-top:10px;}
+.pills{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;}
+.pill{padding:2px 8px;border-radius:10px;font-size:.7rem;color:white;font-weight:600;}
+
+/* ── FORMULAIRE ── */
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.fg.full{grid-template-columns:1fr;}
+.f label{font-size:.7rem;color:var(--muted);display:block;margin-bottom:3px;}
+.f input,.f select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:.8rem;color:var(--text);background:var(--surface);transition:border-color .15s;}
+.f input:focus,.f select:focus{outline:none;border-color:var(--accent);}
+
+/* ── PLANS ── */
+.plans-toolbar{display:flex;gap:6px;margin-bottom:10px;}
+.btn-sm{padding:5px 12px;border:1px solid var(--border);border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text);display:flex;align-items:center;gap:4px;transition:all .15s;}
+.btn-sm:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);}
+.btn-sm.primary{background:var(--accent);color:white;border-color:var(--accent);}
+.btn-sm.primary:hover{background:#1446b0;}
+.btn-sm.danger{background:#fff0f0;color:#c0392b;border-color:#f5c6c6;}
+.btn-sm.danger:hover{background:#ffe0e0;}
+
+.plan-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;overflow:hidden;transition:all .15s;cursor:default;}
+.plan-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
+.plan-card.editing{border-color:#f39c12;box-shadow:0 0 0 3px #fef9e7;}
+
+.plan-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;}
+.plan-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;cursor:pointer;}
+.plan-name-inp{flex:1;border:none;background:transparent;font-size:.85rem;font-weight:600;color:var(--text);outline:none;min-width:0;}
+.plan-badge{background:var(--accent-bg);color:var(--accent);font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+.plan-badge.green{background:#e8f5e8;color:#27ae60;}
+.plan-actions{display:flex;gap:4px;}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:3px;border-radius:4px;font-size:14px;line-height:1;}
+.icon-btn:hover{background:var(--border);color:var(--text);}
+
+.plan-body{padding:8px 12px 12px;border-top:1px solid var(--border);background:white;}
+
+/* Sélection mode */
+.sel-modes{display:flex;gap:5px;margin-bottom:10px;}
+.sel-mode{flex:1;padding:7px 5px;border:1.5px solid var(--border);border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;text-align:center;color:var(--muted);background:var(--bg);transition:all .15s;}
+.sel-mode:hover{border-color:var(--accent);color:var(--accent);}
+.sel-mode.on{border-color:var(--accent);background:var(--accent);color:white;}
+.sel-mode .sm-icon{font-size:1.1rem;display:block;margin-bottom:2px;}
+
+/* Range */
+.range-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.range-row label{font-size:.72rem;color:var(--muted);white-space:nowrap;min-width:32px;}
+.range-row input[type=number]{width:64px;padding:5px 6px;border:1px solid var(--border);border-radius:5px;font-size:.8rem;text-align:center;}
+.range-row input[type=number]:focus{outline:none;border-color:var(--accent);}
+.range-sep{color:var(--muted);}
+
+/* Lasso status */
+.lasso-status{display:none;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:8px 12px;font-size:.75rem;color:#7a5800;margin-bottom:8px;align-items:center;gap:8px;}
+.lasso-status.show{display:flex;}
+.lasso-status svg{flex-shrink:0;}
+
+/* Seg pills */
+.seg-count{font-size:.72rem;color:var(--muted);margin-bottom:6px;}
+.seg-pills{display:flex;flex-wrap:wrap;gap:3px;max-height:72px;overflow-y:auto;}
+.seg-pill{padding:2px 7px;border-radius:8px;font-size:.7rem;color:white;font-weight:600;cursor:pointer;transition:opacity .15s;}
+.seg-pill:hover{opacity:.75;}
+
+/* ── OPTIONS ── */
+.opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.82rem;}
+.opt-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);}
+.opt-row select,.opt-row input[type=range]{flex:1;}
+.opt-row select{padding:4px 8px;border:1px solid var(--border);border-radius:5px;font-size:.78rem;}
+
+/* ── BOUTONS FOOTER ── */
+.btn-main{width:100%;padding:11px;background:var(--navy);color:white;border:none;border-radius:var(--r);font-size:.9rem;font-weight:700;cursor:pointer;transition:background .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-main:hover:not(:disabled){background:#003f6e;}
+.btn-main:disabled{background:var(--muted);cursor:not-allowed;}
+.btn-outline{width:100%;padding:8px;background:var(--surface);color:var(--accent);border:1.5px solid var(--accent);border-radius:var(--r);font-size:.82rem;font-weight:600;cursor:pointer;margin-top:7px;}
+.btn-outline:hover{background:var(--accent-bg);}
+
+/* ── MAP ── */
+.map-wrap{flex:1;position:relative;overflow:hidden;}
+#map{width:100%;height:100%;}
+
+/* Toolbar carte */
+.map-toolbar{position:absolute;top:12px;left:12px;z-index:900;display:flex;flex-direction:column;gap:6px;}
+.map-tool{background:white;border:1px solid var(--border);border-radius:6px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;box-shadow:var(--shadow);transition:all .15s;}
+.map-tool:hover{background:var(--accent-bg);border-color:var(--accent);}
+.map-tool.active{background:var(--accent);color:white;border-color:var(--accent);}
+.map-tool[title]:hover::after{content:attr(title);position:absolute;left:42px;background:#1c2333;color:white;padding:4px 8px;border-radius:4px;font-size:.72rem;white-space:nowrap;pointer-events:none;}
+
+/* Lasso SVG overlay */
+#lasso-svg{position:absolute;inset:0;z-index:800;pointer-events:none;display:none;}
+#lasso-svg.active{pointer-events:all;cursor:crosshair;}
+
+/* Bandeau active plan */
+#active-banner{position:absolute;top:12px;right:12px;z-index:900;display:none;background:white;border:1.5px solid var(--accent);border-radius:var(--r);padding:8px 14px;box-shadow:var(--shadow);font-size:.8rem;max-width:240px;}
+#active-banner .ab-plan{font-weight:700;color:var(--accent);margin-bottom:2px;}
+#active-banner .ab-hint{font-size:.7rem;color:var(--muted);}
+#active-banner .ab-done{background:var(--accent);color:white;border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:.75rem;font-weight:600;margin-top:6px;width:100%;}
+
+/* Tooltip */
+.leaflet-tooltip.seg-tt{background:rgba(20,20,40,.82);color:white;border:none;border-radius:4px;font-size:11px;padding:3px 7px;box-shadow:none;}
+
+/* ══ PRINT ══ */
+@media print {
+  body{height:auto;overflow:visible;}
+  header,.sb,.map-toolbar,#active-banner,#lasso-svg,.leaflet-control-container{display:none!important;}
+  .app{display:block;height:auto;}
+  .map-wrap{position:relative;width:100%;height:auto;}
+  #map{width:297mm;height:190mm;} /* A3 paysage zone carte */
+  /* Page entière */
+  .print-page{display:block!important;}
+}
+
+/* Pages d'impression (cachées en vue normale) */
+.print-page{display:none;}
+@media print{
+  .print-page{display:block;page-break-after:always;width:420mm;min-height:297mm;padding:0;position:relative;}
+  .print-page:last-child{page-break-after:avoid;}
+  .pp-header{background:#0078be;color:white;text-align:center;padding:10px;font-size:18pt;font-weight:bold;text-decoration:underline;}
+  .pp-map{width:100%;height:210mm;position:relative;overflow:hidden;}
+  .pp-map .pp-leaflet{width:100%;height:100%;}
+  .pp-footer{border-top:3px solid #0078be;display:flex;height:60mm;font-size:8pt;}
+  .pp-credits{width:70mm;padding:8px;border-right:1px solid #ddd;font-size:7pt;color:#444;line-height:1.4;}
+  .pp-credits h4{font-weight:bold;text-decoration:underline;margin-bottom:4px;font-size:8pt;}
+  .pp-info{flex:1;padding:8px 14px;}
+  .pp-info h4{text-align:center;font-weight:bold;text-decoration:underline;margin-bottom:6px;}
+  .pp-info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 12px;font-size:7.5pt;}
+  .pp-legend{width:55mm;padding:8px;border-left:1px solid #ddd;}
+  .pp-legend h4{text-align:center;font-weight:bold;text-decoration:underline;margin-bottom:6px;font-size:8pt;}
+  .pp-leg-item{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:7.5pt;}
+  .pp-logos{width:32mm;padding:8px;border-left:1px solid #ddd;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+}
+
+/* Overlay PDF generation */
+#gen-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;}
+#gen-overlay.show{display:flex;}
+.gen-box{background:white;border-radius:12px;padding:28px 36px;text-align:center;min-width:300px;box-shadow:0 12px 40px rgba(0,0,0,.25);}
+.gen-box h3{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:8px;}
+.gen-box p{font-size:.82rem;color:var(--muted);margin-bottom:14px;}
+.gen-prog-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.gen-prog-fill{height:100%;background:var(--navy);border-radius:3px;transition:width .4s;}
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <rect width="20" height="20" rx="4" fill="rgba(255,255,255,.2)"/>
+    <path d="M5 15L10 5l5 10" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="10" cy="5" r="1.5" fill="white"/>
+  </svg>
+  <h1>Plans de collecte</h1>
+  <p>A3 paysage · Fond OSM · Offset latéral</p>
+</header>
+
+<div class="app">
+
+  <!-- ══════════ SIDEBAR ══════════ -->
+  <div class="sb">
+
+    <!-- Steps nav -->
+    <div class="steps">
+      <div class="step active" id="stp-1" onclick="goStep(1)">
+        <div class="step-num">1</div><br>Données
+      </div>
+      <div class="step" id="stp-2" onclick="goStep(2)">
+        <div class="step-num">2</div><br>Plans
+      </div>
+      <div class="step" id="stp-3" onclick="goStep(3)">
+        <div class="step-num">3</div><br>Infos & Export
+      </div>
+    </div>
+
+    <!-- ── Panel 1 : Import ── -->
+    <div class="sb-panel active" id="panel-1">
+      <div class="sec-title">Fichier shapefile</div>
+      <p class="hint">Glissez votre ZIP contenant le <strong>.shp</strong> et le <strong>.dbf</strong>.</p>
+      <div id="dz">
+        <input type="file" id="file-input" accept=".zip">
+        <div class="dz-icon">📂</div>
+        <h4>Glisser le ZIP ici</h4>
+        <p>ou cliquer pour parcourir</p>
+        <button class="dz-btn" onclick="document.getElementById('file-input').click()">Choisir un fichier</button>
+      </div>
+      <div id="info-box"></div>
+    </div>
+
+    <!-- ── Panel 2 : Plans ── -->
+    <div class="sb-panel" id="panel-2">
+      <div class="plans-toolbar">
+        <button class="btn-sm primary" onclick="addPlan()">＋ Nouveau plan</button>
+        <button class="btn-sm" onclick="autoSplit()" title="Découper automatiquement en parts égales">⚡ Auto</button>
+      </div>
+
+      <p class="hint" id="plans-hint">Créez des plans et définissez leurs tronçons par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong> sur la carte.</p>
+
+      <div id="plans-list"></div>
+    </div>
+
+    <!-- ── Panel 3 : Infos & Export ── -->
+    <div class="sb-panel" id="panel-3">
+      <div class="sec-title" style="margin-bottom:10px;">Informations tournée</div>
+      <div class="fg" style="margin-bottom:7px;">
+        <div class="f"><label>Tournée</label><input id="f-tournee"></div>
+        <div class="f"><label>Période</label><input id="f-periode" placeholder="Matin"></div>
+        <div class="f"><label>Jour</label><input id="f-jour" placeholder="Lundi"></div>
+        <div class="f"><label>Fréquence</label><input id="f-freq" placeholder="C0.5"></div>
+        <div class="f"><label>Flux collecté</label><input id="f-flux" placeholder="OMCS"></div>
+        <div class="f"><label>Type semaine</label>
+          <select id="f-semaine"><option value="">—</option><option>Paire</option><option>Impaire</option><option>Toutes</option></select>
+        </div>
+      </div>
+      <div class="fg full" style="margin-bottom:14px;">
+        <div class="f"><label>Saison</label><input id="f-saison"></div>
+      </div>
+
+      <div class="sec-title">Options carte</div>
+      <div class="opt-row"><input type="checkbox" id="opt-labels" checked><label for="opt-labels">Numéros de tronçons</label></div>
+      <div class="opt-row"><input type="checkbox" id="opt-arrows" checked><label for="opt-arrows">Flèches de sens</label></div>
+      <div class="opt-row">
+        <label style="min-width:70px">Offset</label>
+        <select id="opt-offset">
+          <option value="4">Léger (4 px)</option>
+          <option value="6" selected>Standard (6 px)</option>
+          <option value="9">Marqué (9 px)</option>
+        </select>
+      </div>
+      <div class="opt-row">
+        <label style="min-width:70px">Fond</label>
+        <select id="opt-tile">
+          <option value="osm">OpenStreetMap</option>
+          <option value="carto">CartoDB Voyager</option>
+          <option value="topo">OpenTopoMap</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sb-foot">
+      <button class="btn-main" id="btn-next" onclick="nextStep()">
+        <span id="btn-next-label">Suivant →</span>
+      </button>
+      <button class="btn-outline" id="btn-print" style="display:none" onclick="doPrint()">
+        🖨 Imprimer / Enregistrer en PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════ CARTE ══════════ -->
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <!-- Outils carte -->
+    <div class="map-toolbar" id="map-toolbar" style="display:none">
+      <div class="map-tool" id="tool-pan" title="Naviguer" onclick="setTool('pan')">✋</div>
+      <div class="map-tool" id="tool-lasso" title="Lasso — dessiner une zone" onclick="setTool('lasso')">⬡</div>
+      <div class="map-tool" id="tool-click" title="Clic — ajouter/retirer un tronçon" onclick="setTool('click')">👆</div>
+    </div>
+
+    <!-- Lasso SVG -->
+    <svg id="lasso-svg"></svg>
+
+    <!-- Bandeau plan actif -->
+    <div id="active-banner">
+      <div class="ab-plan" id="ab-plan-name">—</div>
+      <div class="ab-hint" id="ab-hint">—</div>
+      <button class="ab-done" onclick="deactivatePlan()">✓ Terminer la sélection</button>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay génération -->
+<div id="gen-overlay">
+  <div class="gen-box">
+    <h3>Préparation de l'impression…</h3>
+    <p id="gen-msg">Centrage des plans…</p>
+    <div class="gen-prog-track"><div class="gen-prog-fill" id="gen-prog" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- Pages d'impression (injectées dynamiquement avant print) -->
+<div id="print-pages"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
+const ACT = {
+  'Collecte bilatérale': {color:'#e07b00',dash:false,w:4,offset:true},
+  'Collecte à droite':   {color:'#1a6e3c',dash:false,w:4,offset:true},
+  'Marche arrière':      {color:'#9b59b6',dash:false,w:4,offset:true},
+  'Haut le pied':        {color:'#444',   dash:true, w:3,offset:true},
+};
+const ACT_ORDER=['Haut le pied','Marche arrière','Collecte à droite','Collecte bilatérale'];
+const TILES={
+  osm:  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  carto:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  topo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+};
+const SWATCHES=['#e74c3c','#2980b9','#e07b00','#8e44ad','#16a085','#c0392b','#1a6e3c','#2c3e50'];
+
+// ═══════════════════════════════════════════════════════
+// ÉTAT
+// ═══════════════════════════════════════════════════════
+let RECS=[], CIRCUIT='', PLANS=[], PCTR=0;
+let MAP, TILE_LYR;
+let SEG={};       // id → {lines, lblMk, arrMk, rec}
+let ALL_BND=[];
+let ACTIVE_PLAN=null;   // plan en cours d'édition
+let TOOL='pan';         // 'pan' | 'lasso' | 'click'
+let OFFSET_PX=6;
+let CUR_STEP=1;
+
+// Lasso
+let lassoPoints=[], lassoDrawing=false;
+
+// ═══════════════════════════════════════════════════════
+// CARTE
+// ═══════════════════════════════════════════════════════
+MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
+setTile('osm');
+MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
+document.getElementById('opt-tile').addEventListener('change',e=>setTile(e.target.value));
+document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();});
+
+function setTile(k){
+  if(TILE_LYR)MAP.removeLayer(TILE_LYR);
+  TILE_LYR=L.tileLayer(TILES[k],{maxZoom:19,crossOrigin:true}).addTo(MAP);
+}
+
+// ═══════════════════════════════════════════════════════
+// STEPS
+// ═══════════════════════════════════════════════════════
+function goStep(n){
+  if(n===1||(n===2&&RECS.length)||(n===3&&PLANS.length)){
+    CUR_STEP=n;
+    document.querySelectorAll('.step').forEach((s,i)=>{
+      s.classList.toggle('active',i+1===n);
+      s.classList.toggle('done',i+1<n);
+    });
+    document.querySelectorAll('.sb-panel').forEach((p,i)=>p.classList.toggle('active',i+1===n));
+    const lbl=document.getElementById('btn-next-label');
+    const btn=document.getElementById('btn-print');
+    if(n===3){lbl.textContent='Prêt à imprimer';btn.style.display='block';}
+    else{lbl.textContent='Suivant →';btn.style.display='none';}
+    document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
+    if(n!==2)deactivatePlan();
+  }
+}
+function nextStep(){
+  if(CUR_STEP===1&&RECS.length)goStep(2);
+  else if(CUR_STEP===2&&PLANS.length)goStep(3);
+  else if(CUR_STEP===3)doPrint();
+}
+
+// ═══════════════════════════════════════════════════════
+// CHARGEMENT FICHIER
+// ═══════════════════════════════════════════════════════
+const dz=document.getElementById('dz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])load(e.dataTransfer.files[0]);});
+document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files[0])load(e.target.files[0]);});
+
+async function load(file){
+  try{
+    const zip=await JSZip.loadAsync(file);
+    let shpE=null,dbfE=null;
+    zip.forEach((p,e)=>{const pl=p.toLowerCase();if(pl.endsWith('.shp'))shpE=e;if(pl.endsWith('.dbf'))dbfE=e;});
+    if(!shpE||!dbfE){alert('ZIP doit contenir un .shp et un .dbf');return;}
+    const [shpBuf,dbfBuf]=await Promise.all([shpE.async('arraybuffer'),dbfE.async('arraybuffer')]);
+    const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
+    RECS=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
+    CIRCUIT=RECS[0]?.nomcircuit||'Circuit';
+    document.getElementById('f-tournee').value=CIRCUIT;
+    showInfo(RECS);
+    buildLayers(RECS);
+    PLANS=[];PCTR=0;
+    // Un plan par défaut avec tous les tronçons
+    addPlan(true);
+    goStep(2);
+  }catch(e){alert('Erreur: '+e.message);console.error(e);}
+}
+
+function readSHP(buf){
+  const v=new DataView(buf),fl=v.getInt32(24,false)*2,geoms=[];
+  let off=100;
+  while(off<fl&&off<buf.byteLength-8){
+    const rl=v.getInt32(off+4,false)*2;off+=8;
+    const st=v.getInt32(off,true);
+    if(st===0){geoms.push([]);off+=rl-4;continue;}
+    if(st!==3&&st!==5){geoms.push([]);off+=rl-4;continue;}
+    off+=4+32;
+    const np=v.getInt32(off,true);off+=4;
+    const npt=v.getInt32(off,true);off+=4;
+    for(let i=0;i<np;i++)off+=4;
+    const pts=[];
+    for(let i=0;i<npt;i++){const lon=v.getFloat64(off,true);off+=8;const lat=v.getFloat64(off,true);off+=8;pts.push([lon,lat]);}
+    geoms.push(pts);
+  }
+  return geoms;
+}
+
+function readDBF(buf){
+  const v=new DataView(buf),n=v.getInt32(4,true),hs=v.getInt16(8,true),rs=v.getInt16(10,true);
+  const dec=new TextDecoder('iso-8859-1'),fields=[];
+  let off=32;
+  while(off<hs-1&&off+32<=buf.byteLength){
+    const raw=new Uint8Array(buf,off,11);let e=raw.indexOf(0);if(e<0)e=11;
+    const name=dec.decode(raw.slice(0,e));const len=v.getUint8(off+16);
+    fields.push({name:name||'_',len});off+=32;if(v.getUint8(off)===0x0D)break;
+  }
+  const recs=[];
+  for(let i=0;i<n;i++){
+    let fo=hs+i*rs;if(fo+rs>buf.byteLength)break;
+    if(v.getUint8(fo)===0x2A)continue;fo++;
+    const rec={};
+    for(const f of fields){let val=dec.decode(new Uint8Array(buf,fo,f.len)).trim();try{val=decodeURIComponent(escape(val));}catch(e){}rec[f.name]=val;fo+=f.len;}
+    recs.push(rec);
+  }
+  return recs;
+}
+
+// ═══════════════════════════════════════════════════════
+// INFO BOX
+// ═══════════════════════════════════════════════════════
+function showInfo(recs){
+  const cnt={};for(const r of recs)cnt[r.nomactiv]=(cnt[r.nomactiv]||0)+1;
+  const cls={'Collecte bilatérale':'background:#e07b00','Collecte à droite':'background:#1a6e3c','Marche arrière':'background:#9b59b6','Haut le pied':'background:#555'};
+  const pills=Object.entries(cnt).map(([a,c])=>`<span class="pill" style="${cls[a]||'background:#555'}">${a.replace('Collecte ','')} · ${c}</span>`).join('');
+  const ids=recs.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  const el=document.getElementById('info-box');
+  el.innerHTML=`<strong>Circuit ${CIRCUIT}</strong> — ${recs.length} tronçons (n°${ids[0]}→${ids[ids.length-1]})<div class="pills">${pills}</div>`;
+  el.style.display='block';
+}
+
+// ═══════════════════════════════════════════════════════
+// COUCHES LEAFLET
+// ═══════════════════════════════════════════════════════
+function offsetPoly(pts,px){
+  if(!px||pts.length<2)return pts;
+  return pts.map((pt,i)=>{
+    const prev=pts[Math.max(0,i-1)],next=pts[Math.min(pts.length-1,i+1)];
+    const pp=MAP.latLngToContainerPoint(L.latLng(prev[0],prev[1]));
+    const pn=MAP.latLngToContainerPoint(L.latLng(next[0],next[1]));
+    const dx=pn.x-pp.x,dy=pn.y-pp.y,len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dy/len,ny=-dx/len;
+    const pc=MAP.latLngToContainerPoint(L.latLng(pt[0],pt[1]));
+    const po=L.point(pc.x+nx*px,pc.y+ny*px);
+    const ll=MAP.containerPointToLatLng(po);
+    return[ll.lat,ll.lng];
+  });
+}
+
+function buildLayers(recs){
+  Object.values(SEG).forEach(s=>{s.lines.forEach(l=>MAP.removeLayer(l));if(s.lblMk)MAP.removeLayer(s.lblMk);if(s.arrMk)MAP.removeLayer(s.arrMk);});
+  SEG={};ALL_BND=[];
+  for(const order of ACT_ORDER){
+    const cfg=ACT[order];
+    for(const r of recs.filter(r=>r.nomactiv===order)){
+      if(!r.points||r.points.length<2)continue;
+      try{
+        const pts=cfg.offset?offsetPoly(r.points,OFFSET_PX):r.points;
+        const lines=[];
+        if(!cfg.dash)lines.push(L.polyline(pts,{color:'white',weight:cfg.w*2+2,opacity:.6,interactive:false}).addTo(MAP));
+        const line=L.polyline(pts,{color:cfg.color,weight:cfg.w,dashArray:cfg.dash?'7 5':null,opacity:.9,interactive:true}).addTo(MAP);
+        line.bindTooltip(`<b>#${r.idtroncon}</b>${r.adresse?' — '+r.adresse:''}`,{className:'seg-tt',sticky:true,direction:'top'});
+        line.on('click',e=>{L.DomEvent.stopPropagation(e);onSegClick(r.idtroncon);});
+        lines.push(line);
+        let lblMk=null,arrMk=null;
+        if(!cfg.dash&&r.idtroncon){
+          const mid=pts[Math.floor(pts.length/2)];
+          const txt=String(r.idtroncon);
+          const tw=txt.length*6.5+8;
+          lblMk=L.marker(mid,{icon:L.divIcon({html:`<div id="lbl-${r.idtroncon}" style="background:${cfg.color};color:white;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.4);">${txt}</div>`,className:'',iconAnchor:[tw/2,9]}),interactive:false}).addTo(MAP);
+          const i0=Math.max(0,Math.floor(pts.length/2)-1),i1=Math.floor(pts.length/2);
+          const ang=Math.atan2(pts[i1][0]-pts[i0][0],pts[i1][1]-pts[i0][1])*180/Math.PI;
+          arrMk=L.marker(mid,{icon:L.divIcon({html:`<svg width="12" height="12" viewBox="0 0 12 12" style="display:block;transform:rotate(${ang}deg);transform-origin:50% 50%;"><polygon points="6,1 11,11 6,8 1,11" fill="${cfg.color}" stroke="white" stroke-width="1.2" stroke-linejoin="round"/></svg>`,className:'',iconAnchor:[6,6]}),interactive:false}).addTo(MAP);
+        }
+        SEG[r.idtroncon]={lines,lblMk,arrMk,rec:r};
+        ALL_BND.push(...r.points);
+      }catch(e){}
+    }
+  }
+  if(ALL_BND.length)MAP.fitBounds(ALL_BND,{padding:[20,20]});
+  refreshColors();
+}
+
+function rebuildOffset(){
+  for(const [id,s] of Object.entries(SEG)){
+    const cfg=ACT[s.rec.nomactiv];if(!cfg?.offset)continue;
+    const pts=offsetPoly(s.rec.points,OFFSET_PX);
+    s.lines.forEach(l=>l.setLatLngs(pts));
+    const mid=pts[Math.floor(pts.length/2)];
+    if(s.lblMk)s.lblMk.setLatLng(mid);
+    if(s.arrMk)s.arrMk.setLatLng(mid);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// GESTION PLANS
+// ═══════════════════════════════════════════════════════
+function addPlan(allTroncons=false){
+  const id=++PCTR;
+  const color=SWATCHES[(PLANS.length)%SWATCHES.length];
+  const ids=RECS.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  const segIds=allTroncons?new Set(RECS.map(r=>r.idtroncon)):new Set();
+  const plan={id,name:allTroncons?'Plan général':`Plan ${id}`,color,segIds,
+    rangeFrom:ids[0]||1,rangeTo:ids[ids.length-1]||1,mode:'range'};
+  PLANS.push(plan);
+  renderPlans();refreshColors();
+  if(!allTroncons)activatePlan(plan,'lasso');
+  return plan;
+}
+
+function removePlan(id){
+  if(ACTIVE_PLAN?.id===id)deactivatePlan();
+  PLANS=PLANS.filter(p=>p.id!==id);
+  renderPlans();refreshColors();
+}
+
+function gp(id){return PLANS.find(p=>p.id===id);}
+
+function autoSplit(){
+  // Découpe automatique : 1 plan par tranche de ~60 tronçons de collecte
+  const collecte=RECS.filter(r=>r.nomactiv!=='Haut le pied');
+  const hlp=RECS.filter(r=>r.nomactiv==='Haut le pied');
+  const size=Math.ceil(collecte.length/Math.ceil(collecte.length/60));
+  PLANS=[];PCTR=0;
+  for(let i=0;i<collecte.length;i+=size){
+    const slice=collecte.slice(i,i+size);
+    const first=parseInt(slice[0].idtroncon),last=parseInt(slice[slice.length-1].idtroncon);
+    const p=addPlanSilent(`Plan ${PLANS.length+1}`,new Set([...slice.map(r=>r.idtroncon),...hlp.map(r=>r.idtroncon)]));
+    p.rangeFrom=first;p.rangeTo=last;
+  }
+  renderPlans();refreshColors();
+}
+function addPlanSilent(name,segIds){
+  const id=++PCTR,color=SWATCHES[(PLANS.length)%SWATCHES.length];
+  const ids=RECS.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  const plan={id,name,color,segIds,rangeFrom:ids[0]||1,rangeTo:ids[ids.length-1]||1,mode:'range'};
+  PLANS.push(plan);return plan;
+}
+
+function applyRange(pid){
+  const p=gp(pid);if(!p)return;
+  const from=parseInt(document.getElementById('rf-'+pid).value)||1;
+  const to=parseInt(document.getElementById('rt-'+pid).value)||1;
+  p.rangeFrom=from;p.rangeTo=to;
+  // Garder les haut-le-pied déjà présents, remplacer les collecte
+  const hlpIds=new Set([...p.segIds].filter(id=>{const r=RECS.find(r=>r.idtroncon===id);return r?.nomactiv==='Haut le pied';}));
+  const rangeIds=new Set(RECS.filter(r=>{const n=parseInt(r.idtroncon);return n>=from&&n<=to;}).map(r=>r.idtroncon));
+  p.segIds=new Set([...hlpIds,...rangeIds]);
+  renderPlans();refreshColors();
+  const bnd=[];for(const id of p.segIds){const s=SEG[id];if(s)bnd.push(...s.rec.points);}
+  if(bnd.length){MAP.fitBounds(bnd,{padding:[30,30],animate:false});}
+}
+
+function activatePlan(plan,mode='lasso'){
+  ACTIVE_PLAN=plan;
+  setTool(mode);
+  updateBanner();
+  renderPlans();refreshColors();
+}
+function deactivatePlan(){
+  ACTIVE_PLAN=null;
+  setTool('pan');
+  document.getElementById('active-banner').style.display='none';
+  renderPlans();refreshColors();
+}
+function updateBanner(){
+  if(!ACTIVE_PLAN){document.getElementById('active-banner').style.display='none';return;}
+  document.getElementById('active-banner').style.display='block';
+  document.getElementById('ab-plan-name').textContent=ACTIVE_PLAN.name;
+  const hints={lasso:'Dessinez une zone au lasso pour sélectionner',click:'Cliquez les tronçons pour les ajouter/retirer',pan:'Naviguez librement'};
+  document.getElementById('ab-hint').textContent=hints[TOOL]||'';
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDU LISTE DES PLANS
+// ═══════════════════════════════════════════════════════
+function renderPlans(){
+  const list=document.getElementById('plans-list');
+  list.innerHTML='';
+  if(!PLANS.length){
+    list.innerHTML='<p class="hint" style="text-align:center;padding:20px 0">Aucun plan. Cliquez <strong>＋ Nouveau plan</strong>.</p>';
+    return;
+  }
+  for(const p of PLANS){
+    const isActive=ACTIVE_PLAN?.id===p.id;
+    const nCollecte=[...p.segIds].filter(id=>{const r=RECS.find(r=>r.idtroncon===id);return r&&r.nomactiv!=='Haut le pied';}).length;
+    const d=document.createElement('div');
+    d.className='plan-card'+(isActive?' editing':'');
+    d.innerHTML=`
+<div class="plan-head" onclick="togglePlanBody(${p.id})">
+  <div class="plan-swatch" style="background:${p.color}" onclick="event.stopPropagation();cycleSwatch(${p.id})" title="Changer la couleur"></div>
+  <input class="plan-name-inp" value="${p.name}" oninput="gp(${p.id}).name=this.value" onclick="event.stopPropagation()">
+  <span class="plan-badge${nCollecte>0?' green':''}">${p.segIds.size} tronçons</span>
+  <div class="plan-actions">
+    <button class="icon-btn" onclick="event.stopPropagation();zoomPlan(${p.id})" title="Centrer">🎯</button>
+    <button class="icon-btn" onclick="event.stopPropagation();removePlan(${p.id})" title="Supprimer">✕</button>
+  </div>
+</div>
+<div class="plan-body" id="pbody-${p.id}" style="display:${isActive?'block':'none'}">
+  <div class="sel-modes">
+    <div class="sel-mode${p.mode==='range'?' on':''}" onclick="setPlanMode(${p.id},'range')">
+      <span class="sm-icon">📏</span>Plage N°
+    </div>
+    <div class="sel-mode${p.mode==='lasso'?' on':''}" onclick="setPlanMode(${p.id},'lasso')">
+      <span class="sm-icon">⬡</span>Lasso
+    </div>
+    <div class="sel-mode${p.mode==='click'?' on':''}" onclick="setPlanMode(${p.id},'click')">
+      <span class="sm-icon">👆</span>Clic
+    </div>
+  </div>
+
+  ${p.mode==='range'?`
+  <div class="range-row">
+    <label>De</label>
+    <input type="number" id="rf-${p.id}" value="${p.rangeFrom}" min="1" style="width:64px">
+    <span class="range-sep">→</span>
+    <label>à</label>
+    <input type="number" id="rt-${p.id}" value="${p.rangeTo}" min="1" style="width:64px">
+  </div>
+  <div style="display:flex;gap:6px;margin-top:6px;">
+    <button class="btn-sm primary" style="flex:1" onclick="applyRange(${p.id})">✓ Appliquer</button>
+    <button class="btn-sm" onclick="activatePlan(gp(${p.id}),'pan');zoomPlan(${p.id})">🎯 Voir</button>
+  </div>`:''}
+
+  ${p.mode==='lasso'?`
+  <div class="lasso-status show" id="ls-${p.id}">
+    <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" fill="none" stroke="#7a5800" stroke-width="1.5"/></svg>
+    <span>Dessinez une zone sur la carte. Cumulable.</span>
+  </div>
+  <button class="btn-sm primary" style="width:100%;justify-content:center" onclick="activatePlan(gp(${p.id}),'lasso')">
+    ${ACTIVE_PLAN?.id===p.id&&TOOL==='lasso'?'✓ Mode lasso actif':'Activer le lasso'}
+  </button>`:''}
+
+  ${p.mode==='click'?`
+  <button class="btn-sm primary" style="width:100%;justify-content:center" onclick="activatePlan(gp(${p.id}),'click')">
+    ${ACTIVE_PLAN?.id===p.id&&TOOL==='click'?'✓ Mode clic actif':'Activer le clic'}
+  </button>`:''}
+
+  <div class="seg-count" style="margin-top:8px">${nCollecte} tronçons de collecte · ${p.segIds.size-nCollecte} haut le pied</div>
+  <div class="seg-pills" id="spills-${p.id}">
+    ${[...p.segIds].sort((a,b)=>parseInt(a)-parseInt(b)).slice(0,40).map(id=>{
+      const r=RECS.find(r=>r.idtroncon===id);
+      const cfg=ACT[r?.nomactiv]||ACT['Haut le pied'];
+      return`<span class="seg-pill" style="background:${cfg.color}" onclick="toggleSeg(${p.id},'${id}')" title="Retirer #${id}">${id}</span>`;
+    }).join('')}
+    ${p.segIds.size>40?`<span class="seg-pill" style="background:#999">+${p.segIds.size-40}</span>`:''}
+  </div>
+  <button class="btn-sm danger" style="width:100%;justify-content:center;margin-top:8px" onclick="gp(${p.id}).segIds.clear();renderPlans();refreshColors()">🗑 Vider la sélection</button>
+</div>`;
+    list.appendChild(d);
+  }
+}
+
+function togglePlanBody(pid){
+  const p=gp(pid);if(!p)return;
+  const body=document.getElementById('pbody-'+pid);
+  const open=body.style.display!=='none';
+  if(open&&ACTIVE_PLAN?.id===pid)deactivatePlan();
+  else{body.style.display=open?'none':'block';if(!open)activatePlan(p,p.mode);}
+}
+
+function setPlanMode(pid,mode){
+  const p=gp(pid);if(!p)return;
+  p.mode=mode;
+  activatePlan(p,mode);
+  renderPlans();
+}
+
+function cycleSwatch(pid){
+  const p=gp(pid);if(!p)return;
+  const idx=SWATCHES.indexOf(p.color);
+  p.color=SWATCHES[(idx+1)%SWATCHES.length];
+  renderPlans();refreshColors();
+}
+
+function zoomPlan(pid){
+  const p=gp(pid);if(!p||!p.segIds.size)return;
+  const bnd=[];for(const id of p.segIds){const s=SEG[id];if(s)bnd.push(...s.rec.points);}
+  if(bnd.length)MAP.fitBounds(bnd,{padding:[30,30],animate:true});
+}
+
+function toggleSeg(pid,sid){
+  const p=gp(pid);if(!p)return;
+  if(p.segIds.has(sid))p.segIds.delete(sid);else p.segIds.add(sid);
+  renderPlans();refreshColors();
+}
+
+// ═══════════════════════════════════════════════════════
+// OUTILS CARTE
+// ═══════════════════════════════════════════════════════
+function setTool(t){
+  TOOL=t;
+  ['pan','lasso','click'].forEach(k=>document.getElementById('tool-'+k)?.classList.toggle('active',k===t));
+  const svg=document.getElementById('lasso-svg');
+  if(t==='lasso'){svg.style.display='block';svg.classList.add('active');MAP.dragging.disable();}
+  else{svg.style.display='none';svg.classList.remove('active');MAP.dragging.enable();}
+  if(t==='click')MAP.getContainer().style.cursor='crosshair';
+  else MAP.getContainer().style.cursor='';
+  updateBanner();
+}
+
+// Clic sur tronçon
+function onSegClick(id){
+  if(!ACTIVE_PLAN||TOOL!=='click')return;
+  const p=ACTIVE_PLAN;
+  if(p.segIds.has(id))p.segIds.delete(id);else p.segIds.add(id);
+  renderPlans();refreshColors();
+}
+
+// ═══════════════════════════════════════════════════════
+// LASSO
+// ═══════════════════════════════════════════════════════
+const lassoSvg=document.getElementById('lasso-svg');
+lassoSvg.addEventListener('mousedown',lassoStart);
+lassoSvg.addEventListener('touchstart',e=>{e.preventDefault();lassoStart(e.touches[0]);},{passive:false});
+
+// Coords relatives au conteneur carte (même référentiel que latLngToContainerPoint)
+function svgXY(e){
+  const r=lassoSvg.getBoundingClientRect();
+  return[e.clientX-r.left, e.clientY-r.top];
+}
+
+function lassoStart(e){
+  if(TOOL!=='lasso'||!ACTIVE_PLAN)return;
+  lassoDrawing=true;
+  lassoPoints=[svgXY(e)];
+  drawLasso();
+  lassoSvg.addEventListener('mousemove',lassoMove);
+  lassoSvg.addEventListener('mouseup',lassoEnd);
+  lassoSvg.addEventListener('touchmove',e2=>{e2.preventDefault();lassoMove(e2.touches[0]);},{passive:false});
+  lassoSvg.addEventListener('touchend',lassoEnd,{once:true});
+}
+function lassoMove(e){
+  if(!lassoDrawing)return;
+  lassoPoints.push(svgXY(e));
+  if(lassoPoints.length%2===0)drawLasso();
+}
+function lassoEnd(){
+  if(!lassoDrawing)return;
+  lassoDrawing=false;
+  lassoSvg.removeEventListener('mousemove',lassoMove);
+  lassoSvg.removeEventListener('mouseup',lassoEnd);
+  if(lassoPoints.length>3)applyLasso();
+  lassoPoints=[];
+  drawLasso();
+}
+function drawLasso(){
+  if(!lassoPoints.length){lassoSvg.innerHTML='';return;}
+  const d=lassoPoints.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ')+'Z';
+  lassoSvg.innerHTML=`<path d="${d}" fill="rgba(26,86,219,.15)" stroke="#1a56db" stroke-width="2" stroke-dasharray="5 3" fill-rule="evenodd"/>`;
+}
+function applyLasso(){
+  if(!ACTIVE_PLAN)return;
+  // latLngToContainerPoint retourne des coords relatives au conteneur carte
+  // svgXY retourne aussi des coords relatives au conteneur carte → même référentiel ✓
+  for(const [id,s] of Object.entries(SEG)){
+    const mid=s.rec.points[Math.floor(s.rec.points.length/2)];
+    const pt=MAP.latLngToContainerPoint(L.latLng(mid[0],mid[1]));
+    if(pointInPoly(pt.x,pt.y,lassoPoints))ACTIVE_PLAN.segIds.add(id);
+  }
+  renderPlans();refreshColors();
+}
+function pointInPoly(x,y,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;
+}
+
+// ═══════════════════════════════════════════════════════
+// COULEURS PREVIEW
+// ═══════════════════════════════════════════════════════
+function refreshColors(){
+  const planOf={};
+  for(const p of PLANS)for(const id of p.segIds)planOf[id]=true;
+  for(const [id,s] of Object.entries(SEG)){
+    const cfg=ACT[s.rec.nomactiv]||ACT['Haut le pied'];
+    const inPlan=!!planOf[id];
+    const inActive=ACTIVE_PLAN?.segIds.has(id);
+    const inSel=ACTIVE_PLAN&&(TOOL==='click'||TOOL==='lasso')&&inActive;
+    const op=cfg.dash?(inPlan?.7:.18):inSel?1:inPlan?1:.1;
+    const w=inSel?cfg.w+2:cfg.w;
+    const col=inSel?'#f39c12':cfg.color;
+    s.lines.forEach((l,i)=>{
+      if(i===0&&!cfg.dash)l.setStyle({opacity:inPlan||inSel?.65:.07});
+      else l.setStyle({color:col,opacity:op,weight:w});
+    });
+    const lbl=document.getElementById('lbl-'+id);
+    if(lbl){lbl.style.background=inSel?'#f39c12':cfg.color;lbl.style.opacity=inPlan||inSel?'1':'0.1';}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// IMPRESSION — window.print() avec @media print
+// ═══════════════════════════════════════════════════════
+async function doPrint(){
+  const active=PLANS.filter(p=>p.segIds.size>0);
+  if(!active.length){alert('Aucun tronçon dans les plans.');return;}
+  document.getElementById('gen-overlay').classList.add('show');
+  document.getElementById('gen-msg').textContent='Génération des pages…';
+  document.getElementById('gen-prog').style.width='20%';
+  await sleep(50);
+
+  const g=id=>document.getElementById(id)?.value||'';
+  const today=new Date().toLocaleDateString('fr-FR');
+  const container=document.getElementById('print-pages');
+  container.innerHTML='';
+
+  const tileKey=document.getElementById('opt-tile').value;
+  const tileUrl=TILES[tileKey];
+
+  for(let i=0;i<active.length;i++){
+    const plan=active[i];
+    const pct=20+Math.round(i/active.length*70);
+    document.getElementById('gen-prog').style.width=pct+'%';
+    document.getElementById('gen-msg').textContent=`Page ${i+1}/${active.length}…`;
+
+    // Collect recs du plan
+    const mapRecs=RECS.filter(r=>plan.segIds.has(r.idtroncon));
+    const presentActs=[...new Set(mapRecs.map(r=>r.nomactiv))];
+
+    // Bbox pour centre de carte
+    let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+    for(const r of mapRecs)for(const [la,lo] of r.points){minLat=Math.min(minLat,la);maxLat=Math.max(maxLat,la);minLon=Math.min(minLon,lo);maxLon=Math.max(maxLon,lo);}
+    const cLat=(minLat+maxLat)/2,cLon=(minLon+maxLon)/2;
+
+    // Calcul zoom auto (approx)
+    const latSpan=maxLat-minLat, lonSpan=maxLon-minLon;
+    const zoom=Math.max(10,Math.min(16,Math.floor(Math.log2(360/Math.max(latSpan,lonSpan)*0.6))));
+
+    // Légende HTML
+    const legDefs=[
+      ['Collecte bilatérale','#e07b00',false],
+      ['Collecte à droite','#1a6e3c',false],
+      ['Marche arrière','#9b59b6',false],
+      ['Haut le pied','#444',true],
+    ].filter(([name])=>presentActs.includes(name));
+    const legHTML=legDefs.map(([name,color,dash])=>`
+<div class="pp-leg-item">
+  <svg width="38" height="10"><line x1="2" y1="5" x2="30" y2="5" stroke="${color}" stroke-width="${dash?2:4}" stroke-dasharray="${dash?'5 3':''}" stroke-linecap="round"/>${!dash?`<polygon points="33,2 38,5 33,8" fill="${color}"/>`:''}
+  </svg>${name}
+</div>`).join('');
+
+    // Page HTML
+    const page=document.createElement('div');
+    page.className='print-page';
+    page.innerHTML=`
+<div class="pp-header">Plan de collecte</div>
+<div class="pp-map">
+  <div id="pmap-${i}" class="pp-leaflet"></div>
+</div>
+<div class="pp-footer">
+  <div class="pp-credits">
+    <h4>Crédits</h4>
+    Confidentiel - Ce document est élaboré à partir du savoir et de données collectées par COVED Environnement - groupe Paprec.
+    A ce titre le présent document et les données sont couverts par le secret industriel et commercial et protégés par la loi.
+  </div>
+  <div class="pp-info">
+    <h4>Informations sur la tournée</h4>
+    <div class="pp-info-grid">
+      <div>Tournée : <strong>${g('f-tournee')}</strong></div>
+      <div>Période : <strong>${g('f-periode')}</strong></div>
+      <div>Fréquence : <strong>${g('f-freq')}</strong></div>
+      <div>Saison : <strong>${g('f-saison')}</strong></div>
+      <div>Date d'édition : <strong>${today}</strong></div>
+      <div>Type semaine : <strong>${g('f-semaine')}</strong></div>
+      <div>Jour : <strong>${g('f-jour')}</strong></div>
+      <div>Flux collecté : <strong>${g('f-flux')}</strong></div>
+      <div>Version : <strong></strong></div>
+    </div>
+  </div>
+  <div class="pp-legend">
+    <h4>Légende</h4>
+    ${legHTML}
+    <div class="pp-leg-item">
+      <svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#2E7D32" stroke="white" stroke-width="1.5"/></svg>
+      Départ
+    </div>
+  </div>
+  <div class="pp-logos" style="font-size:10pt;font-weight:900;color:#005a9e;text-align:center">
+    PAPREC<br><span style="font-size:7pt;font-weight:normal;color:#999">Syvalorm · COVED</span>
+  </div>
+</div>`;
+    container.appendChild(page);
+
+    // Créer carte Leaflet dans la page
+    await sleep(30);
+    const mapDiv=document.getElementById('pmap-'+i);
+    if(!mapDiv)continue;
+    const pmap=L.map(mapDiv,{zoomControl:false,attributionControl:true,preferCanvas:true,fadeAnimation:false,zoomAnimation:false});
+    L.tileLayer(tileUrl,{maxZoom:19}).addTo(pmap);
+
+    // Tronçons
+    for(const order of ACT_ORDER){
+      const cfg=ACT[order];
+      for(const r of mapRecs.filter(r=>r.nomactiv===order)){
+        if(!cfg.dash)L.polyline(r.points,{color:'white',weight:cfg.w*2+2,opacity:.7,interactive:false}).addTo(pmap);
+        L.polyline(r.points,{color:cfg.color,weight:cfg.w,dashArray:cfg.dash?'8 6':null,opacity:1,interactive:false}).addTo(pmap);
+        if(!cfg.dash&&r.idtroncon){
+          const mid=r.points[Math.floor(r.points.length/2)];
+          const txt=String(r.idtroncon);const tw=txt.length*7+10;
+          L.marker(mid,{icon:L.divIcon({html:`<div style="background:${cfg.color};color:white;font-size:10px;font-weight:700;padding:2px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.4);">${txt}</div>`,className:'',iconAnchor:[tw/2,10]}),interactive:false}).addTo(pmap);
+        }
+      }
+    }
+
+    // Hors-plan en gris
+    for(const r of RECS.filter(r=>!plan.segIds.has(r.idtroncon))){
+      const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
+      L.polyline(r.points,{color:'#bbb',weight:cfg.dash?1:1.5,dashArray:cfg.dash?'5 4':null,opacity:.2,interactive:false}).addTo(pmap);
+    }
+
+    // Point départ
+    const firstId=[...plan.segIds].sort((a,b)=>parseInt(a)-parseInt(b))[0];
+    const fr=RECS.find(r=>r.idtroncon===firstId);
+    if(fr)L.marker(fr.points[0],{icon:L.divIcon({html:`<div style="width:18px;height:18px;background:#2E7D32;border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white">P</div>`,className:'',iconAnchor:[9,9]})}).addTo(pmap);
+
+    // Boussole simple
+    L.Control.Compass=L.Control.extend({
+      onAdd:()=>{const d=L.DomUtil.create('div');d.style.cssText='background:white;border:1px solid #aaa;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#c0392b;box-shadow:0 1px 4px rgba(0,0,0,.2)';d.innerHTML='N↑';return d;}
+    });
+    new L.Control.Compass({position:'bottomleft'}).addTo(pmap);
+
+    const bnd=mapRecs.reduce((a,r)=>[...a,...r.points],[]);
+    if(bnd.length)pmap.fitBounds(bnd,{padding:[20,20],animate:false});
+    await sleep(100);
+  }
+
+  document.getElementById('gen-prog').style.width='95%';
+  document.getElementById('gen-msg').textContent='Prêt — la boîte d\'impression va s\'ouvrir…';
+  await sleep(400);
+
+  document.getElementById('gen-overlay').classList.remove('show');
+
+  // Lancer l'impression
+  window.print();
+
+  // Nettoyer après impression
+  setTimeout(()=>{container.innerHTML='';},2000);
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+</script>
+</body>
+</html>
