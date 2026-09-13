@@ -817,39 +817,68 @@ function segmentLength(pts){
   for(let i=1;i<pts.length;i++)d+=haversine(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
   return d;
 }
-// Propose une taille de plan (nb de tronçons) selon la densité réelle du circuit :
-// des tronçons courts (zone dense) restent lisibles avec moins de tronçons par page,
-// des tronçons longs (zone peu dense) permettent d'en regrouper davantage par page.
-function suggestPlanSize(collecte){
-  const lengths=collecte.map(r=>segmentLength(r.points)).filter(n=>isFinite(n)&&n>0);
-  if(!lengths.length)return{target:60,avg:null};
-  const avg=lengths.reduce((a,b)=>a+b,0)/lengths.length;
-  const target=avg<80?40:avg<200?55:75;
-  return{target,avg};
+// Nombre de tronçons qu'un plan peut accueillir selon la longueur LOCALE du tronçon :
+// courts (zone dense) → moins par page pour rester lisible ; longs (zone étendue) →
+// davantage par page. Calculé tronçon par tronçon (pas sur une moyenne globale), pour
+// bien gérer un circuit qui mêle des zones denses et des zones étendues.
+function targetCountForLen(lenM){
+  if(lenM<=80)return 40;
+  if(lenM>=200)return 75;
+  const t=(lenM-80)/(200-80);
+  return 40+t*(75-40);
 }
 function autoSplit(){
   const collecte=RECS.filter(r=>r.nomactiv!=='Haut le pied');
-  const hlp=RECS.filter(r=>r.nomactiv==='Haut le pied');
-  const{target,avg}=suggestPlanSize(collecte);
-  const size=collecte.length?Math.ceil(collecte.length/Math.ceil(collecte.length/target)):target;
   PLANS=[];PCTR=0;
-  for(let i=0;i<collecte.length;i+=size){
-    const slice=collecte.slice(i,i+size);
+  if(!collecte.length){renderPlans();refreshColors();updatePrintSummary();showAutoSplitNote(null,[],[]);return;}
+  const lens=collecte.map(r=>segmentLength(r.points));
+  const sizes=[];
+  let i=0;
+  while(i<collecte.length){
+    let acc=0,j=i;
+    // Accumule des tronçons jusqu'à remplir la "capacité" d'une page (budget=1),
+    // chaque tronçon consommant plus ou moins de budget selon sa longueur locale.
+    while(j<collecte.length&&acc<1&&(j-i)<90){
+      acc+=1/targetCountForLen(lens[j]||150);
+      j++;
+    }
+    if(j===i)j=i+1; // garde-fou anti boucle infinie
+    const slice=collecte.slice(i,j);
     const first=parseInt(slice[0].idtroncon),last=parseInt(slice[slice.length-1].idtroncon);
-    const p=addPlanSilent(`Plan ${PLANS.length+1}`,new Set([...slice.map(r=>r.idtroncon),...hlp.map(r=>r.idtroncon)]));
+    // Haut-le-pied uniquement s'ils sont encadrés par les tronçons de collecte de CE plan
+    // (pas ceux menant au premier tronçon ni ceux suivant le dernier — hors périmètre du plan)
+    const hlpInRange=RECS.filter(r=>r.nomactiv==='Haut le pied'&&parseInt(r.idtroncon)>=first&&parseInt(r.idtroncon)<=last).map(r=>r.idtroncon);
+    const p=addPlanSilent(`Plan ${PLANS.length+1}`,new Set([...slice.map(r=>r.idtroncon),...hlpInRange]));
     p.rangeFrom=first;p.rangeTo=last;
+    sizes.push(slice.length);
+    i=j;
   }
   renderPlans();refreshColors();updatePrintSummary();
-  showAutoSplitNote(avg,size,PLANS.length);
+  const avgLen=lens.reduce((a,b)=>a+b,0)/lens.length;
+  showAutoSplitNote(avgLen,lens,sizes);
 }
-function showAutoSplitNote(avgLen,size,nPlans){
+function showAutoSplitNote(avgLen,lens,sizes){
   const el=document.getElementById('autosplit-note');
   if(!el)return;
-  if(!avgLen||!nPlans){el.style.display='none';return;}
-  const density=avgLen<80?`dense (tronçons courts, ≈${Math.round(avgLen)}m en moyenne)`
-    :avgLen<200?`de densité mixte (≈${Math.round(avgLen)}m en moyenne)`
-    :`étendu (tronçons longs, ≈${Math.round(avgLen)}m en moyenne)`;
-  el.innerHTML=`💡 Circuit ${density} → <strong>${nPlans} plan${nPlans>1?'s':''}</strong> suggéré${nPlans>1?'s':''} de ~${size} tronçons chacun. Estimation ajustable ci-dessous.`;
+  if(!avgLen||!sizes.length){el.style.display='none';return;}
+  const n=sizes.length;
+  // Homogénéité jugée sur la dispersion RÉELLE des longueurs de tronçons (percentiles),
+  // pas sur la taille des plans en sortie : le dernier plan est souvent un reliquat plus
+  // petit sans que ça signifie une densité variable.
+  const sorted=[...lens].sort((a,b)=>a-b);
+  const p10=sorted[Math.floor(sorted.length*0.1)];
+  const p90=sorted[Math.floor(sorted.length*0.9)];
+  const homogene=p90<=Math.max(p10*3,p10+40);
+  if(homogene){
+    const avgSize=Math.round(sizes.reduce((a,b)=>a+b,0)/n);
+    const density=avgLen<80?`dense (tronçons courts, ≈${Math.round(avgLen)}m en moyenne)`
+      :avgLen<200?`de densité mixte (≈${Math.round(avgLen)}m en moyenne)`
+      :`étendu (tronçons longs, ≈${Math.round(avgLen)}m en moyenne)`;
+    el.innerHTML=`💡 Circuit ${density} → <strong>${n} plan${n>1?'s':''}</strong> suggéré${n>1?'s':''} de ~${avgSize} tronçons chacun. Estimation ajustable ci-dessous.`;
+  }else{
+    const min=Math.min(...sizes),max=Math.max(...sizes);
+    el.innerHTML=`💡 Densité variable selon les zones → <strong>${n} plans</strong> suggérés, de ${min} à ${max} tronçons chacun (moins dans les zones denses, plus dans les zones étendues). Estimation ajustable ci-dessous.`;
+  }
   el.style.display='block';
 }
 function mergeAll(){
