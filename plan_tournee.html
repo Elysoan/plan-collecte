@@ -334,6 +334,8 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 
       <p class="hint" id="plans-hint">Découpage automatique appliqué à l'import. Ajustez par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong>, ou <strong>⚡ Auto</strong> / <strong>⛙ Fusionner</strong> pour repartir de zéro. Glissez la poignée <strong>⠿</strong> pour réordonner les plans (ordre = ordre d'impression). L'orientation (paysage/portrait) de chaque plan est détectée automatiquement selon l'emprise des tronçons.</p>
 
+      <div id="autosplit-note" class="hint" style="display:none;background:var(--accent-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;color:var(--text)"></div>
+
       <div id="plans-list"></div>
     </div>
 
@@ -803,11 +805,33 @@ function removePlan(id){
 
 function gp(id){return PLANS.find(p=>p.id===id);}
 
+// Longueur d'un tronçon (mètres) via la formule de haversine, pour jauger la densité du circuit
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000,toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function segmentLength(pts){
+  let d=0;
+  for(let i=1;i<pts.length;i++)d+=haversine(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
+  return d;
+}
+// Propose une taille de plan (nb de tronçons) selon la densité réelle du circuit :
+// des tronçons courts (zone dense) restent lisibles avec moins de tronçons par page,
+// des tronçons longs (zone peu dense) permettent d'en regrouper davantage par page.
+function suggestPlanSize(collecte){
+  const lengths=collecte.map(r=>segmentLength(r.points)).filter(n=>isFinite(n)&&n>0);
+  if(!lengths.length)return{target:60,avg:null};
+  const avg=lengths.reduce((a,b)=>a+b,0)/lengths.length;
+  const target=avg<80?40:avg<200?55:75;
+  return{target,avg};
+}
 function autoSplit(){
-  // Découpe automatique : 1 plan par tranche de ~60 tronçons de collecte
   const collecte=RECS.filter(r=>r.nomactiv!=='Haut le pied');
   const hlp=RECS.filter(r=>r.nomactiv==='Haut le pied');
-  const size=Math.ceil(collecte.length/Math.ceil(collecte.length/60));
+  const{target,avg}=suggestPlanSize(collecte);
+  const size=collecte.length?Math.ceil(collecte.length/Math.ceil(collecte.length/target)):target;
   PLANS=[];PCTR=0;
   for(let i=0;i<collecte.length;i+=size){
     const slice=collecte.slice(i,i+size);
@@ -816,11 +840,23 @@ function autoSplit(){
     p.rangeFrom=first;p.rangeTo=last;
   }
   renderPlans();refreshColors();updatePrintSummary();
+  showAutoSplitNote(avg,size,PLANS.length);
+}
+function showAutoSplitNote(avgLen,size,nPlans){
+  const el=document.getElementById('autosplit-note');
+  if(!el)return;
+  if(!avgLen||!nPlans){el.style.display='none';return;}
+  const density=avgLen<80?`dense (tronçons courts, ≈${Math.round(avgLen)}m en moyenne)`
+    :avgLen<200?`de densité mixte (≈${Math.round(avgLen)}m en moyenne)`
+    :`étendu (tronçons longs, ≈${Math.round(avgLen)}m en moyenne)`;
+  el.innerHTML=`💡 Circuit ${density} → <strong>${nPlans} plan${nPlans>1?'s':''}</strong> suggéré${nPlans>1?'s':''} de ~${size} tronçons chacun. Estimation ajustable ci-dessous.`;
+  el.style.display='block';
 }
 function mergeAll(){
   if(!RECS.length)return;
   PLANS=[];PCTR=0;
   addPlan(true);
+  document.getElementById('autosplit-note').style.display='none';
 }
 function addPlanSilent(name,segIds){
   const id=++PCTR,color=SWATCHES[(PLANS.length)%SWATCHES.length];
