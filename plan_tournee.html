@@ -124,6 +124,14 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .seg-pill{padding:2px 7px;border-radius:8px;font-size:.7rem;color:white;font-weight:600;cursor:pointer;transition:opacity .15s;}
 .seg-pill:hover{opacity:.75;}
 
+/* ── MINIATURES AVANT EXPORT ── */
+.thumbs-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.thumb-card{cursor:pointer;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px;transition:border-color .15s;}
+.thumb-card:hover{border-color:var(--accent);}
+.thumb-label{font-size:.66rem;color:var(--text);margin-top:4px;display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+.thumb-swatch{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.thumb-orient{color:var(--muted);}
+
 /* ── OPTIONS ── */
 .opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.82rem;}
 .opt-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);}
@@ -157,6 +165,14 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 #active-banner .ab-plan{font-weight:700;color:var(--accent);margin-bottom:2px;}
 #active-banner .ab-hint{font-size:.7rem;color:var(--muted);}
 #active-banner .ab-done{background:var(--accent);color:white;border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:.75rem;font-weight:600;margin-top:6px;width:100%;}
+
+/* Recherche rapide d'un tronçon */
+#seg-search{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:900;display:none;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:4px;gap:4px;align-items:center;transition:transform .12s;}
+#seg-search.not-found{animation:shake .35s;}
+#seg-search input{border:none;outline:none;font-size:.8rem;padding:5px 6px;width:110px;color:var(--text);}
+#seg-search button{background:var(--accent);color:white;border:none;border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:.85rem;flex-shrink:0;}
+#seg-search button:hover{background:#1446b0;}
+@keyframes shake{0%,100%{transform:translateX(-50%);}25%{transform:translateX(calc(-50% - 6px));}75%{transform:translateX(calc(-50% + 6px));}}
 
 /* Tooltip */
 .leaflet-tooltip.seg-tt{background:rgba(20,20,40,.82);color:white;border:none;border-radius:4px;font-size:11px;padding:3px 7px;box-shadow:none;}
@@ -367,6 +383,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       </div>
 
       <div id="print-summary" class="hint" style="margin-top:14px;background:var(--accent-bg);border-radius:6px;padding:10px 12px;color:var(--text)"></div>
+      <div id="print-thumbs" class="thumbs-grid"></div>
     </div>
 
     <div class="sb-foot">
@@ -388,6 +405,12 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="map-tool" id="tool-pan" title="Naviguer" onclick="setTool('pan')">✋</div>
       <div class="map-tool" id="tool-lasso" title="Lasso — dessiner une zone" onclick="setTool('lasso')">⬡</div>
       <div class="map-tool" id="tool-click" title="Clic — ajouter/retirer un tronçon" onclick="setTool('click')">👆</div>
+    </div>
+
+    <!-- Recherche rapide d'un tronçon -->
+    <div id="seg-search">
+      <input type="text" id="seg-search-input" placeholder="N° tronçon…" onkeydown="if(event.key==='Enter')findSegment()">
+      <button onclick="findSegment()" title="Localiser le tronçon">🔍</button>
     </div>
 
     <!-- Lasso SVG -->
@@ -592,6 +615,7 @@ function goStep(n){
     if(n===3){lbl.textContent='Prêt à imprimer';btn.style.display='block';updatePrintSummary();}
     else{lbl.textContent='Suivant →';btn.style.display='none';}
     document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
+    document.getElementById('seg-search').style.display=n===2?'flex':'none';
     if(n!==2)deactivatePlan();
     scheduleSave();
   }
@@ -1035,6 +1059,24 @@ function onSegClick(id){
   renderPlans();refreshColors();
 }
 
+// Recherche rapide d'un tronçon par n°
+function findSegment(){
+  const box=document.getElementById('seg-search');
+  const raw=document.getElementById('seg-search-input').value.trim();
+  if(!raw)return;
+  const s=SEG[raw];
+  if(!s){
+    box.classList.remove('not-found');void box.offsetWidth;box.classList.add('not-found');
+    return;
+  }
+  MAP.fitBounds(s.rec.points,{padding:[160,160],maxZoom:18,animate:true});
+  const cfg=ACT[s.rec.nomactiv]||ACT['Haut le pied'];
+  const mainLine=s.lines[s.lines.length-1];
+  mainLine.setStyle({weight:cfg.w+6,opacity:1,color:'#f39c12'});
+  mainLine.openTooltip();
+  setTimeout(refreshColors,1300);
+}
+
 // ═══════════════════════════════════════════════════════
 // LASSO
 // ═══════════════════════════════════════════════════════
@@ -1127,13 +1169,53 @@ function updatePrintSummary(){
   const el=document.getElementById('print-summary');
   if(!el)return;
   const active=PLANS.filter(p=>p.segIds.size>0);
-  if(!active.length){el.textContent='Aucun plan avec des tronçons pour le moment.';return;}
+  if(!active.length){el.textContent='Aucun plan avec des tronçons pour le moment.';document.getElementById('print-thumbs').innerHTML='';return;}
   const land=active.filter(p=>planOrientation(p)==='landscape').length;
   const port=active.length-land;
   const parts=[];
   if(land)parts.push(`${land} en A3 paysage`);
   if(port)parts.push(`${port} en A3 portrait`);
   el.innerHTML=`🖨 <strong>${active.length} plan${active.length>1?'s':''}</strong> prêt${active.length>1?'s':''} à l'impression — ${parts.join(' · ')}.`;
+  renderThumbnails(active);
+}
+
+// Aperçus miniatures (SVG léger, pas de carte Leaflet) de chaque plan avant export
+function renderThumbnails(active){
+  const wrap=document.getElementById('print-thumbs');
+  if(!wrap)return;
+  wrap.innerHTML=active.map(p=>{
+    const orient=planOrientation(p);
+    const w=orient==='landscape'?110:78, h=orient==='landscape'?78:110;
+    let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+    const segs=[];
+    for(const id of p.segIds){
+      const s=SEG[id];if(!s)continue;
+      segs.push(s.rec);
+      for(const [la,lo] of s.rec.points){
+        if(la<minLat)minLat=la;if(la>maxLat)maxLat=la;
+        if(lo<minLon)minLon=lo;if(lo>maxLon)maxLon=lo;
+      }
+    }
+    let lines='';
+    if(isFinite(minLat)){
+      const pad=5;
+      const spanLat=(maxLat-minLat)||0.0001, spanLon=(maxLon-minLon)||0.0001;
+      const scale=Math.min((w-pad*2)/spanLon,(h-pad*2)/spanLat);
+      const offX=(w-spanLon*scale)/2, offY=(h-spanLat*scale)/2;
+      const X=lo=>offX+(lo-minLon)*scale;
+      const Y=la=>h-(offY+(la-minLat)*scale);
+      for(const r of segs){
+        const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
+        const pts=r.points.map(([la,lo])=>`${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join(' ');
+        lines+=`<polyline points="${pts}" fill="none" stroke="${cfg.color}" stroke-width="${cfg.dash?1:1.6}" stroke-dasharray="${cfg.dash?'3 2':''}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+    }
+    return `
+<div class="thumb-card" onclick="goStep(2);zoomPlan(${p.id})" title="Voir ${p.name} sur la carte">
+  <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="background:#eef1f6;border-radius:4px;display:block">${lines}</svg>
+  <div class="thumb-label"><span class="thumb-swatch" style="background:${p.color}"></span>${p.name}<span class="thumb-orient">${orient==='landscape'?'▭':'▯'}</span></div>
+</div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════
