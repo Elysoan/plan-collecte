@@ -86,14 +86,16 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .drag-handle{cursor:grab;color:var(--muted);font-size:13px;padding:2px 2px;flex-shrink:0;letter-spacing:-1px;}
 .drag-handle:active{cursor:grabbing;}
 
-.plan-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;}
+.plan-head{display:flex;flex-direction:column;gap:5px;padding:9px 12px;cursor:pointer;}
+.plan-head-row1{display:flex;align-items:center;gap:8px;}
+.plan-head-row2{display:flex;align-items:center;gap:6px;padding-left:22px;flex-wrap:wrap;}
 .plan-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;cursor:pointer;}
 .plan-name-inp{flex:1;border:none;background:transparent;font-size:.85rem;font-weight:600;color:var(--text);outline:none;min-width:0;}
 .plan-badge{background:var(--accent-bg);color:var(--accent);font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;}
 .plan-badge.green{background:#e8f5e8;color:#27ae60;}
-.orient-pill{background:#eef1f6;color:#555;font-size:.66rem;font-weight:700;padding:2px 6px;border-radius:8px;white-space:nowrap;}
+.orient-pill{background:#eef1f6;color:#555;font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;}
 .orient-select{font-size:.7rem;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:white;color:var(--text);}
-.plan-actions{display:flex;gap:4px;}
+.plan-actions{display:flex;gap:4px;flex-shrink:0;}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:3px;border-radius:4px;font-size:14px;line-height:1;}
 .icon-btn:hover{background:var(--border);color:var(--text);}
 
@@ -276,7 +278,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <circle cx="10" cy="5" r="1.5" fill="white"/>
   </svg>
   <h1>Plans de collecte</h1>
-  <p>A3 paysage/portrait auto · Fond OSM · Offset latéral</p>
+  <p>A3 paysage/portrait auto · Offset latéral</p>
   <button class="hdr-reset" id="hdr-reset-btn" style="display:none" onclick="startOver()" title="Effacer la session en cours et repartir de zéro">🗑 Nouvelle session</button>
 </header>
 
@@ -329,7 +331,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="plans-toolbar">
         <button class="btn-sm primary" onclick="addPlan()">＋ Nouveau plan</button>
         <button class="btn-sm" onclick="autoSplit()" title="Découper automatiquement en parts égales">⚡ Auto</button>
-        <button class="btn-sm" onclick="mergeAll()" title="Regrouper tous les tronçons dans un seul plan">⛙ Fusionner</button>
+        <button class="btn-sm" onclick="mergeAll()" title="Regrouper tous les tronçons de collecte dans un seul plan (hors trajets d'accès/retour au dépôt)">⛙ Fusionner</button>
       </div>
 
       <p class="hint" id="plans-hint">Découpage automatique appliqué à l'import. Ajustez par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong>, ou <strong>⚡ Auto</strong> / <strong>⛙ Fusionner</strong> pour repartir de zéro. Glissez la poignée <strong>⠿</strong> pour réordonner les plans (ordre = ordre d'impression). L'orientation (paysage/portrait) de chaque plan est détectée automatiquement selon l'emprise des tronçons.</p>
@@ -378,9 +380,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="opt-row">
         <label style="min-width:70px">Fond</label>
         <select id="opt-tile">
-          <option value="carto" selected>CartoDB Voyager</option>
+          <option value="topo" selected>OpenTopoMap</option>
           <option value="ign">IGN Plan (France)</option>
-          <option value="topo">OpenTopoMap</option>
+          <option value="carto">CartoDB Voyager (usage limité, peut être bloqué)</option>
           <option value="osm">OpenStreetMap (usage limité, peut être bloqué)</option>
         </select>
       </div>
@@ -557,11 +559,11 @@ function restoreSession(){
     const el=document.getElementById(id);if(el)el.value=val;
   }
   if(data.opts){
-    document.getElementById('opt-tile').value=data.opts.tile||'carto';
+    document.getElementById('opt-tile').value=data.opts.tile||'topo';
     document.getElementById('opt-offset').value=data.opts.offset||'6';
     document.getElementById('opt-labels').checked=data.opts.labels!==false;
     document.getElementById('opt-arrows').checked=data.opts.arrows!==false;
-    setTile(data.opts.tile||'carto');
+    setTile(data.opts.tile||'topo');
   }
   showInfo(RECS);
   buildLayers(RECS);
@@ -592,7 +594,7 @@ FIELD_IDS.forEach(id=>document.getElementById(id)?.addEventListener('input',sche
 // CARTE
 // ═══════════════════════════════════════════════════════
 MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
-setTile('carto');
+setTile('topo');
 MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
 document.getElementById('opt-tile').addEventListener('change',e=>{setTile(e.target.value);scheduleSave();});
 document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();scheduleSave();});
@@ -791,9 +793,13 @@ function addPlan(allTroncons=false){
   const id=++PCTR;
   const color=SWATCHES[(PLANS.length)%SWATCHES.length];
   const ids=RECS.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
-  const segIds=allTroncons?new Set(RECS.map(r=>r.idtroncon)):new Set();
+  let segIds=new Set(),rangeFrom=ids[0]||1,rangeTo=ids[ids.length-1]||1;
+  if(allTroncons){
+    const ov=overviewSegIds();
+    segIds=ov.segIds;rangeFrom=ov.first;rangeTo=ov.last;
+  }
   const plan={id,name:allTroncons?'Plan général':`Plan ${id}`,color,segIds,
-    rangeFrom:ids[0]||1,rangeTo:ids[ids.length-1]||1,mode:'range',orientation:'auto'};
+    rangeFrom,rangeTo,mode:'range',orientation:'auto'};
   PLANS.push(plan);
   renderPlans();refreshColors();updatePrintSummary();
   if(!allTroncons)activatePlan(plan,'lasso');
@@ -830,35 +836,57 @@ function targetCountForLen(lenM){
   const t=(lenM-80)/(200-80);
   return 40+t*(75-40);
 }
+// Segments "vue d'ensemble" : tout le circuit, hors haut-le-pied de tête (avant le
+// tout premier tronçon de collecte) et de queue (après le tout dernier) — ce sont des
+// trajets d'accès/retour au dépôt, pas des tronçons de la tournée proprement dite.
+function overviewSegIds(){
+  const firstIdx=RECS.findIndex(r=>r.nomactiv!=='Haut le pied');
+  if(firstIdx<0)return{segIds:new Set(),first:1,last:1};
+  let lastIdx=firstIdx;
+  for(let k=RECS.length-1;k>=0;k--){if(RECS[k].nomactiv!=='Haut le pied'){lastIdx=k;break;}}
+  const segIds=new Set();
+  for(let k=firstIdx;k<=lastIdx;k++)segIds.add(RECS[k].idtroncon);
+  return{segIds,first:parseInt(RECS[firstIdx].idtroncon),last:parseInt(RECS[lastIdx].idtroncon)};
+}
 function autoSplit(){
-  const collecte=RECS.filter(r=>r.nomactiv!=='Haut le pied');
   PLANS=[];PCTR=0;
-  if(!collecte.length){renderPlans();refreshColors();updatePrintSummary();showAutoSplitNote(null,[],[]);return;}
-  const lens=collecte.map(r=>segmentLength(r.points));
+  const collecteIdx=[];
+  RECS.forEach((r,idx)=>{if(r.nomactiv!=='Haut le pied')collecteIdx.push(idx);});
+  if(!collecteIdx.length){renderPlans();refreshColors();updatePrintSummary();showAutoSplitNote(null,[],[]);return;}
+  const lens=RECS.map(r=>segmentLength(r.points));
   const sizes=[];
-  let i=0;
-  while(i<collecte.length){
-    let acc=0,j=i;
-    // Accumule des tronçons jusqu'à remplir la "capacité" d'une page (budget=1),
-    // chaque tronçon consommant plus ou moins de budget selon sa longueur locale.
-    while(j<collecte.length&&acc<1&&(j-i)<90){
-      acc+=1/targetCountForLen(lens[j]||150);
-      j++;
+  let ptr=0;
+  while(ptr<collecteIdx.length){
+    // Accumule des tronçons jusqu'à remplir la "capacité" d'une page (budget=1) : chaque
+    // tronçon consomme plus ou moins de budget selon sa longueur locale, ET les haut-le-pied
+    // intercalés entre deux tronçons de collecte du même plan comptent aussi dans ce budget
+    // (sinon un gros paquet de haut-le-pied ferait exploser la taille du plan sans être vu).
+    let acc=0,scan=collecteIdx[ptr],endPtr=ptr,lastRecIdx=collecteIdx[ptr];
+    while(endPtr<collecteIdx.length&&acc<1&&(endPtr-ptr)<90){
+      const recIdx=collecteIdx[endPtr];
+      for(let k=scan;k<=recIdx;k++)acc+=1/targetCountForLen(lens[k]||150);
+      lastRecIdx=recIdx;
+      scan=recIdx+1;
+      endPtr++;
     }
-    if(j===i)j=i+1; // garde-fou anti boucle infinie
-    const slice=collecte.slice(i,j);
-    const first=parseInt(slice[0].idtroncon),last=parseInt(slice[slice.length-1].idtroncon);
-    // Haut-le-pied uniquement s'ils sont encadrés par les tronçons de collecte de CE plan
-    // (pas ceux menant au premier tronçon ni ceux suivant le dernier — hors périmètre du plan)
-    const hlpInRange=RECS.filter(r=>r.nomactiv==='Haut le pied'&&parseInt(r.idtroncon)>=first&&parseInt(r.idtroncon)<=last).map(r=>r.idtroncon);
-    const p=addPlanSilent(`Plan ${PLANS.length+1}`,new Set([...slice.map(r=>r.idtroncon),...hlpInRange]));
+    const first=parseInt(RECS[collecteIdx[ptr]].idtroncon),last=parseInt(RECS[lastRecIdx].idtroncon);
+    const segIds=new Set();
+    for(let k=collecteIdx[ptr];k<=lastRecIdx;k++)segIds.add(RECS[k].idtroncon);
+    const p=addPlanSilent(`Plan ${PLANS.length+1}`,segIds);
     p.rangeFrom=first;p.rangeTo=last;
-    sizes.push(slice.length);
-    i=j;
+    sizes.push(endPtr-ptr);
+    ptr=endPtr;
   }
+  // Vue d'ensemble en tête de liste : tout le circuit (hlp de tête/queue exclus),
+  // en plus des plans par zone — pour une page de contexte avant le détail.
+  const ov=overviewSegIds();
+  PLANS.unshift({id:++PCTR,name:"Vue d'ensemble",color:'#2c3e50',segIds:ov.segIds,
+    rangeFrom:ov.first,rangeTo:ov.last,mode:'range',orientation:'auto'});
+
   renderPlans();refreshColors();updatePrintSummary();
-  const avgLen=lens.reduce((a,b)=>a+b,0)/lens.length;
-  showAutoSplitNote(avgLen,lens,sizes);
+  const collecteLens=collecteIdx.map(idx=>lens[idx]);
+  const avgLen=collecteLens.reduce((a,b)=>a+b,0)/collecteLens.length;
+  showAutoSplitNote(avgLen,collecteLens,sizes);
 }
 function showAutoSplitNote(avgLen,lens,sizes){
   const el=document.getElementById('autosplit-note');
@@ -970,14 +998,18 @@ function renderPlans(){
     d.className='plan-card'+(isActive?' editing':'');
     d.innerHTML=`
 <div class="plan-head" onclick="togglePlanBody(${p.id})">
-  <span class="drag-handle" draggable="true" ondragstart="planDragStart(event,${p.id})" ondragend="planDragEnd(event)" onclick="event.stopPropagation()" title="Glisser pour réordonner">⠿</span>
-  <div class="plan-swatch" style="background:${p.color}" onclick="event.stopPropagation();cycleSwatch(${p.id})" title="Changer la couleur"></div>
-  <input class="plan-name-inp" value="${p.name}" oninput="gp(${p.id}).name=this.value" onclick="event.stopPropagation()">
-  <span class="orient-pill" title="Orientation A3 détectée automatiquement (modifiable dans le détail du plan)">${orient==='landscape'?'▭ Paysage':'▯ Portrait'}</span>
-  <span class="plan-badge${nCollecte>0?' green':''}">${p.segIds.size} tronçons</span>
-  <div class="plan-actions">
-    <button class="icon-btn" onclick="event.stopPropagation();zoomPlan(${p.id})" title="Centrer">🎯</button>
-    <button class="icon-btn" onclick="event.stopPropagation();removePlan(${p.id})" title="Supprimer">✕</button>
+  <div class="plan-head-row1">
+    <span class="drag-handle" draggable="true" ondragstart="planDragStart(event,${p.id})" ondragend="planDragEnd(event)" onclick="event.stopPropagation()" title="Glisser pour réordonner">⠿</span>
+    <div class="plan-swatch" style="background:${p.color}" onclick="event.stopPropagation();cycleSwatch(${p.id})" title="Changer la couleur"></div>
+    <input class="plan-name-inp" value="${p.name}" oninput="gp(${p.id}).name=this.value" onclick="event.stopPropagation()">
+    <div class="plan-actions">
+      <button class="icon-btn" onclick="event.stopPropagation();zoomPlan(${p.id})" title="Centrer">🎯</button>
+      <button class="icon-btn" onclick="event.stopPropagation();removePlan(${p.id})" title="Supprimer">✕</button>
+    </div>
+  </div>
+  <div class="plan-head-row2">
+    <span class="orient-pill" title="Orientation A3 détectée automatiquement (modifiable dans le détail du plan)">${orient==='landscape'?'Paysage':'Portrait'}</span>
+    <span class="plan-badge${nCollecte>0?' green':''}">${p.segIds.size} tronçons</span>
   </div>
 </div>
 <div class="plan-body" id="pbody-${p.id}" style="display:${isActive?'block':'none'}">
@@ -1281,7 +1313,7 @@ function renderThumbnails(active){
     return `
 <div class="thumb-card" onclick="goStep(2);zoomPlan(${p.id})" title="Voir ${p.name} sur la carte">
   <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="background:#eef1f6;border-radius:4px;display:block">${lines}</svg>
-  <div class="thumb-label"><span class="thumb-swatch" style="background:${p.color}"></span>${p.name}<span class="thumb-orient">${orient==='landscape'?'▭':'▯'}</span></div>
+  <div class="thumb-label"><span class="thumb-swatch" style="background:${p.color}"></span>${p.name}<span class="thumb-orient">${orient==='landscape'?'(P)':'(V)'}</span></div>
 </div>`;
   }).join('');
 }
