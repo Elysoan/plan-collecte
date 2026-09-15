@@ -78,16 +78,24 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .btn-sm.danger{background:#fff0f0;color:#c0392b;border-color:#f5c6c6;}
 .btn-sm.danger:hover{background:#ffe0e0;}
 
-.plan-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;overflow:hidden;transition:all .15s;cursor:default;}
+.plan-card{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:8px;overflow:hidden;transition:border-color .15s,box-shadow .15s;cursor:default;}
 .plan-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
 .plan-card.editing{border-color:#f39c12;box-shadow:0 0 0 3px #fef9e7;}
+.plan-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
+.plan-card.dragging{opacity:.4;}
+.drag-handle{cursor:grab;color:var(--muted);font-size:13px;padding:2px 2px;flex-shrink:0;letter-spacing:-1px;}
+.drag-handle:active{cursor:grabbing;}
 
-.plan-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;}
+.plan-head{display:flex;flex-direction:column;gap:5px;padding:9px 12px;cursor:pointer;}
+.plan-head-row1{display:flex;align-items:center;gap:8px;}
+.plan-head-row2{display:flex;align-items:center;gap:6px;padding-left:22px;flex-wrap:wrap;}
 .plan-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;cursor:pointer;}
 .plan-name-inp{flex:1;border:none;background:transparent;font-size:.85rem;font-weight:600;color:var(--text);outline:none;min-width:0;}
 .plan-badge{background:var(--accent-bg);color:var(--accent);font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;}
 .plan-badge.green{background:#e8f5e8;color:#27ae60;}
-.plan-actions{display:flex;gap:4px;}
+.orient-pill{background:#eef1f6;color:#555;font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;}
+.orient-select{font-size:.7rem;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:white;color:var(--text);}
+.plan-actions{display:flex;gap:4px;flex-shrink:0;}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:3px;border-radius:4px;font-size:14px;line-height:1;}
 .icon-btn:hover{background:var(--border);color:var(--text);}
 
@@ -117,6 +125,14 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .seg-pills{display:flex;flex-wrap:wrap;gap:3px;max-height:72px;overflow-y:auto;}
 .seg-pill{padding:2px 7px;border-radius:8px;font-size:.7rem;color:white;font-weight:600;cursor:pointer;transition:opacity .15s;}
 .seg-pill:hover{opacity:.75;}
+
+/* ── MINIATURES AVANT EXPORT ── */
+.thumbs-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.thumb-card{cursor:pointer;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px;transition:border-color .15s;}
+.thumb-card:hover{border-color:var(--accent);}
+.thumb-label{font-size:.66rem;color:var(--text);margin-top:4px;display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+.thumb-swatch{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.thumb-orient{color:var(--muted);}
 
 /* ── OPTIONS ── */
 .opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.82rem;}
@@ -152,38 +168,92 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 #active-banner .ab-hint{font-size:.7rem;color:var(--muted);}
 #active-banner .ab-done{background:var(--accent);color:white;border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:.75rem;font-weight:600;margin-top:6px;width:100%;}
 
+/* Recherche rapide d'un tronçon */
+#seg-search{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:900;display:none;background:white;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:4px;gap:4px;align-items:center;transition:transform .12s;}
+#seg-search.not-found{animation:shake .35s;}
+#seg-search input{border:none;outline:none;font-size:.8rem;padding:5px 6px;width:110px;color:var(--text);}
+#seg-search button{background:var(--accent);color:white;border:none;border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:.85rem;flex-shrink:0;}
+#seg-search button:hover{background:#1446b0;}
+@keyframes shake{0%,100%{transform:translateX(-50%);}25%{transform:translateX(calc(-50% - 6px));}75%{transform:translateX(calc(-50% + 6px));}}
+
 /* Tooltip */
 .leaflet-tooltip.seg-tt{background:rgba(20,20,40,.82);color:white;border:none;border-radius:4px;font-size:11px;padding:3px 7px;box-shadow:none;}
 
 /* ══ PRINT ══ */
+@page { size: 420mm 297mm; margin: 0; }
+
 @media print {
   body{height:auto;overflow:visible;}
-  header,.sb,.map-toolbar,#active-banner,#lasso-svg,.leaflet-control-container{display:none!important;}
+  header,.sb,.map-toolbar,#active-banner,#lasso-svg,.leaflet-control-container,.map-wrap,#gen-overlay{display:none!important;}
   .app{display:block;height:auto;}
-  .map-wrap{position:relative;width:100%;height:auto;}
-  #map{width:297mm;height:190mm;} /* A3 paysage zone carte */
-  /* Page entière */
-  .print-page{display:block!important;}
 }
 
-/* Pages d'impression (cachées en vue normale) */
-.print-page{display:none;}
+/*
+  Pages d'impression : construites hors-écran mais à leur taille physique réelle (mm)
+  dès la génération (position:absolute, décalées hors du viewport). Leaflet calcule
+  ainsi tuiles/zoom sur la bonne taille dès le départ — plus de recalcul ni de tuiles
+  manquantes au moment d'imprimer. Au print, on repasse juste en position normale pour
+  activer la pagination (page-break-after).
+
+  Toutes les pages ont la MÊME taille physique (A3 paysage) : la plupart des navigateurs
+  n'appliquent qu'un seul format de papier par impression, même avec des règles @page
+  nommées par page. Pour un plan "portrait", c'est donc le CONTENU (.pp-inner) qui est
+  mis en forme au format portrait puis pivoté de 90° pour remplir la feuille paysage —
+  la feuille physique reste toujours identique, seule son orientation de lecture change.
+*/
+#print-pages{position:relative;}
+.print-page{
+  display:flex;align-items:center;justify-content:center;
+  position:absolute;left:-99999px;top:0;
+  width:420mm;height:297mm;
+  box-sizing:border-box;overflow:hidden;background:white;
+  font-family:'Segoe UI',system-ui,sans-serif;
+}
+.pp-inner{flex-shrink:0;display:flex;flex-direction:column;width:420mm;height:297mm;}
+.print-page.orient-portrait .pp-inner{
+  width:297mm;height:420mm;
+  transform:rotate(90deg);
+}
+
+.pp-header{background:linear-gradient(120deg,#005a9e,#0078be);color:white;display:flex;align-items:center;gap:12px;padding:6mm 10mm;flex-shrink:0;}
+.pp-header .pp-swatch{width:9mm;height:9mm;border-radius:3px;border:1.5px solid rgba(255,255,255,.7);flex-shrink:0;}
+.pp-header .pp-titles{flex:1;min-width:0;}
+.pp-header .pp-plan-name{font-size:14pt;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-header .pp-sub{font-size:8pt;opacity:.85;letter-spacing:.03em;text-transform:uppercase;}
+.pp-header .pp-pagenum{font-size:9pt;font-weight:700;background:rgba(255,255,255,.18);padding:4px 10px;border-radius:12px;white-space:nowrap;}
+
+.pp-map{flex:1;min-height:0;position:relative;overflow:hidden;}
+.pp-map .pp-leaflet{width:100%;height:100%;}
+
+.pp-footer{flex-shrink:0;border-top:3px solid #0078be;display:grid;
+  grid-template-columns:2fr 3fr 2fr 1.3fr;grid-template-areas:"credits info legend logos";
+  column-gap:10px;padding:3mm 10mm;font-size:8pt;min-height:42mm;}
+.print-page.orient-portrait .pp-footer{grid-template-columns:1fr 1fr;grid-template-areas:"info logos" "credits legend";row-gap:6px;column-gap:14px;}
+
+.pp-credits{grid-area:credits;padding-right:8px;border-right:1px solid #ddd;font-size:6.6pt;color:#555;line-height:1.4;}
+.pp-credits h4{font-weight:700;color:#005a9e;margin-bottom:4px;font-size:7.5pt;text-transform:uppercase;letter-spacing:.03em;}
+.pp-info{grid-area:info;padding:0 10px;}
+.pp-info h4{font-weight:700;color:#005a9e;margin-bottom:6px;font-size:8.5pt;text-transform:uppercase;letter-spacing:.03em;}
+.pp-info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 12px;font-size:7.5pt;}
+.pp-info-grid div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-legend{grid-area:legend;padding:0 8px;border-left:1px solid #ddd;}
+.pp-legend h4{font-weight:700;color:#005a9e;margin-bottom:6px;font-size:7.5pt;text-transform:uppercase;letter-spacing:.03em;}
+.pp-leg-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:7.5pt;}
+.pp-logos{grid-area:logos;border-left:1px solid #ddd;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 6px;}
+.pp-logos img{max-width:100%;max-height:16mm;object-fit:contain;}
+.pp-brand{font-size:9pt;font-weight:900;color:#005a9e;text-align:center;letter-spacing:.02em;}
+.pp-brand span{display:block;font-size:6pt;font-weight:600;color:#888;letter-spacing:.04em;}
+.print-page.orient-portrait .pp-credits,.print-page.orient-portrait .pp-legend{border-right:none;}
+
+.pp-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:450;overflow:hidden;}
+.pp-watermark span{font-size:46pt;font-weight:800;color:rgba(0,90,158,.09);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;transform:rotate(-22deg);}
+
 @media print{
-  .print-page{display:block;page-break-after:always;width:420mm;min-height:297mm;padding:0;position:relative;}
+  /* position:relative (pas static) : .print-page doit rester le repère de positionnement
+     de .pp-inner (absolute, pour la rotation portrait), tout en restant dans le flux
+     normal du document pour que page-break-after fonctionne. */
+  .print-page{position:relative;left:auto;top:auto;page-break-after:always;}
   .print-page:last-child{page-break-after:avoid;}
-  .pp-header{background:#0078be;color:white;text-align:center;padding:10px;font-size:18pt;font-weight:bold;text-decoration:underline;}
-  .pp-map{width:100%;height:210mm;position:relative;overflow:hidden;}
-  .pp-map .pp-leaflet{width:100%;height:100%;}
-  .pp-footer{border-top:3px solid #0078be;display:flex;height:60mm;font-size:8pt;}
-  .pp-credits{width:70mm;padding:8px;border-right:1px solid #ddd;font-size:7pt;color:#444;line-height:1.4;}
-  .pp-credits h4{font-weight:bold;text-decoration:underline;margin-bottom:4px;font-size:8pt;}
-  .pp-info{flex:1;padding:8px 14px;}
-  .pp-info h4{text-align:center;font-weight:bold;text-decoration:underline;margin-bottom:6px;}
-  .pp-info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 12px;font-size:7.5pt;}
-  .pp-legend{width:55mm;padding:8px;border-left:1px solid #ddd;}
-  .pp-legend h4{text-align:center;font-weight:bold;text-decoration:underline;margin-bottom:6px;font-size:8pt;}
-  .pp-leg-item{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:7.5pt;}
-  .pp-logos{width:32mm;padding:8px;border-left:1px solid #ddd;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 }
 
 /* Overlay PDF generation */
@@ -194,6 +264,18 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .gen-box p{font-size:.82rem;color:var(--muted);margin-bottom:14px;}
 .gen-prog-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
 .gen-prog-fill{height:100%;background:var(--navy);border-radius:3px;transition:width .4s;}
+
+/* Reprise de session */
+#restore-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;}
+#restore-overlay.show{display:flex;}
+.restore-box{background:white;border-radius:12px;padding:26px 32px;text-align:center;max-width:360px;box-shadow:0 12px 40px rgba(0,0,0,.25);}
+.restore-box h3{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:8px;}
+.restore-box p{font-size:.82rem;color:var(--muted);margin-bottom:18px;line-height:1.5;}
+.restore-box .row{display:flex;gap:8px;}
+.restore-box .row button{flex:1;}
+
+.hdr-reset{background:none;border:1px solid rgba(255,255,255,.35);color:white;font-size:.7rem;padding:4px 10px;border-radius:6px;cursor:pointer;margin-left:12px;flex-shrink:0;}
+.hdr-reset:hover{background:rgba(255,255,255,.15);}
 </style>
 </head>
 <body>
@@ -205,8 +287,21 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <circle cx="10" cy="5" r="1.5" fill="white"/>
   </svg>
   <h1>Plans de collecte</h1>
-  <p>A3 paysage · Fond OSM · Offset latéral</p>
+  <p>A3 paysage/portrait auto · Offset latéral</p>
+  <button class="hdr-reset" id="hdr-reset-btn" style="display:none" onclick="startOver()" title="Effacer la session en cours et repartir de zéro">🗑 Nouvelle session</button>
 </header>
+
+<!-- Reprise de session -->
+<div id="restore-overlay">
+  <div class="restore-box">
+    <h3>Reprendre la session en cours ?</h3>
+    <p id="restore-msg">Un travail non terminé a été retrouvé.</p>
+    <div class="row">
+      <button class="btn-sm" onclick="discardSession()">Nouvelle session</button>
+      <button class="btn-sm primary" onclick="restoreSession()">↻ Reprendre</button>
+    </div>
+  </div>
+</div>
 
 <div class="app">
 
@@ -245,9 +340,12 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="plans-toolbar">
         <button class="btn-sm primary" onclick="addPlan()">＋ Nouveau plan</button>
         <button class="btn-sm" onclick="autoSplit()" title="Découper automatiquement en parts égales">⚡ Auto</button>
+        <button class="btn-sm" onclick="mergeAll()" title="Regrouper tous les tronçons de collecte dans un seul plan (hors trajets d'accès/retour au dépôt)">⛙ Fusionner</button>
       </div>
 
-      <p class="hint" id="plans-hint">Créez des plans et définissez leurs tronçons par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong> sur la carte.</p>
+      <p class="hint" id="plans-hint">Découpage automatique appliqué à l'import. Ajustez par <strong>plage</strong>, <strong>lasso</strong> ou <strong>clic</strong>, ou <strong>⚡ Auto</strong> / <strong>⛙ Fusionner</strong> pour repartir de zéro. Glissez la poignée <strong>⠿</strong> pour réordonner les plans (ordre = ordre d'impression). L'orientation (paysage/portrait) de chaque plan est détectée automatiquement selon l'emprise des tronçons.</p>
+
+      <div id="autosplit-note" class="hint" style="display:none;background:var(--accent-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;color:var(--text)"></div>
 
       <div id="plans-list"></div>
     </div>
@@ -255,8 +353,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <!-- ── Panel 3 : Infos & Export ── -->
     <div class="sb-panel" id="panel-3">
       <div class="sec-title" style="margin-bottom:10px;">Informations tournée</div>
-      <div class="fg" style="margin-bottom:7px;">
+      <div class="fg" style="margin-bottom:14px;">
         <div class="f"><label>Tournée</label><input id="f-tournee"></div>
+        <div class="f"><label>Commune</label><input id="f-commune"></div>
         <div class="f"><label>Période</label><input id="f-periode" placeholder="Matin"></div>
         <div class="f"><label>Jour</label><input id="f-jour" placeholder="Lundi"></div>
         <div class="f"><label>Fréquence</label><input id="f-freq" placeholder="C0.5"></div>
@@ -264,12 +363,19 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
         <div class="f"><label>Type semaine</label>
           <select id="f-semaine"><option value="">—</option><option>Paire</option><option>Impaire</option><option>Toutes</option></select>
         </div>
-      </div>
-      <div class="fg full" style="margin-bottom:14px;">
         <div class="f"><label>Saison</label><input id="f-saison"></div>
       </div>
 
-      <div class="sec-title">Options carte</div>
+      <div class="sec-title">Logo collectivité</div>
+      <div id="logo-empty" class="hint" style="margin-bottom:8px">Affiché sur chaque plan imprimé, à côté du logo Paprec · COVED.</div>
+      <div id="logo-preview" style="display:none;align-items:center;gap:10px;margin-bottom:10px;">
+        <img id="logo-img" style="height:40px;max-width:130px;object-fit:contain;border:1px solid var(--border);border-radius:4px;background:white;padding:4px">
+        <button class="btn-sm danger" onclick="clearLogo()">✕ Retirer</button>
+      </div>
+      <input type="file" id="logo-input" accept="image/*" style="display:none" onchange="onLogoFile(this.files[0])">
+      <button class="btn-sm" id="logo-btn" onclick="document.getElementById('logo-input').click()">📁 Choisir un logo</button>
+
+      <div class="sec-title" style="margin-top:16px;">Options carte</div>
       <div class="opt-row"><input type="checkbox" id="opt-labels" checked><label for="opt-labels">Numéros de tronçons</label></div>
       <div class="opt-row"><input type="checkbox" id="opt-arrows" checked><label for="opt-arrows">Flèches de sens</label></div>
       <div class="opt-row">
@@ -283,17 +389,19 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="opt-row">
         <label style="min-width:70px">Fond</label>
         <select id="opt-tile">
-          <option value="osm">OpenStreetMap</option>
-          <option value="carto">CartoDB Voyager</option>
-          <option value="topo">OpenTopoMap</option>
+          <option value="topo" selected>OpenTopoMap</option>
+          <option value="ign">IGN Plan (France)</option>
+          <option value="carto">CartoDB Voyager (usage limité, peut être bloqué)</option>
+          <option value="osm">OpenStreetMap (usage limité, peut être bloqué)</option>
         </select>
       </div>
+
+      <div id="print-summary" class="hint" style="margin-top:14px;background:var(--accent-bg);border-radius:6px;padding:10px 12px;color:var(--text)"></div>
+      <div id="print-thumbs" class="thumbs-grid"></div>
     </div>
 
     <div class="sb-foot">
-      <button class="btn-main" id="btn-next" onclick="nextStep()">
-        <span id="btn-next-label">Suivant →</span>
-      </button>
+      <button class="btn-main" id="btn-next" onclick="nextStep()">Suivant →</button>
       <button class="btn-outline" id="btn-print" style="display:none" onclick="doPrint()">
         🖨 Imprimer / Enregistrer en PDF
       </button>
@@ -309,6 +417,12 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="map-tool" id="tool-pan" title="Naviguer" onclick="setTool('pan')">✋</div>
       <div class="map-tool" id="tool-lasso" title="Lasso — dessiner une zone" onclick="setTool('lasso')">⬡</div>
       <div class="map-tool" id="tool-click" title="Clic — ajouter/retirer un tronçon" onclick="setTool('click')">👆</div>
+    </div>
+
+    <!-- Recherche rapide d'un tronçon -->
+    <div id="seg-search">
+      <input type="text" id="seg-search-input" placeholder="N° tronçon…" onkeydown="if(event.key==='Enter')findSegment()">
+      <button onclick="findSegment()" title="Localiser le tronçon">🔍</button>
     </div>
 
     <!-- Lasso SVG -->
@@ -350,6 +464,8 @@ const TILES={
   osm:  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   carto:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
   topo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  // Géoplateforme IGN (France) — plan officiel, sans clé API pour les couches "essentielles"
+  ign:  'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',
 };
 const SWATCHES=['#e74c3c','#2980b9','#e07b00','#8e44ad','#16a085','#c0392b','#1a6e3c','#2c3e50'];
 
@@ -364,18 +480,133 @@ let ACTIVE_PLAN=null;   // plan en cours d'édition
 let TOOL='pan';         // 'pan' | 'lasso' | 'click'
 let OFFSET_PX=6;
 let CUR_STEP=1;
+let LOGO_DATA=null;
 
 // Lasso
 let lassoPoints=[], lassoDrawing=false;
 
 // ═══════════════════════════════════════════════════════
+// LOGO COLLECTIVITÉ (persisté en local, léger et pratique d'une session à l'autre)
+// ═══════════════════════════════════════════════════════
+try{LOGO_DATA=localStorage.getItem('pc_logo')||null;}catch(e){}
+function refreshLogoUI(){
+  const has=!!LOGO_DATA;
+  document.getElementById('logo-empty').style.display=has?'none':'block';
+  document.getElementById('logo-preview').style.display=has?'flex':'none';
+  document.getElementById('logo-btn').style.display=has?'none':'inline-flex';
+  if(has)document.getElementById('logo-img').src=LOGO_DATA;
+}
+function onLogoFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    LOGO_DATA=e.target.result;
+    try{localStorage.setItem('pc_logo',LOGO_DATA);}catch(e){}
+    refreshLogoUI();
+  };
+  reader.readAsDataURL(file);
+}
+function clearLogo(){
+  LOGO_DATA=null;
+  try{localStorage.removeItem('pc_logo');}catch(e){}
+  refreshLogoUI();
+}
+refreshLogoUI();
+
+// ═══════════════════════════════════════════════════════
+// SAUVEGARDE DE SESSION (localStorage) — reprise après rechargement/fermeture
+// ═══════════════════════════════════════════════════════
+const SESSION_KEY='pc_session_v1';
+const FIELD_IDS=['f-tournee','f-commune','f-periode','f-jour','f-freq','f-flux','f-semaine','f-saison'];
+let SAVE_TIMER=null, SAVE_BROKEN=false;
+
+function scheduleSave(){
+  if(!RECS.length)return;
+  clearTimeout(SAVE_TIMER);
+  SAVE_TIMER=setTimeout(saveSession,400);
+}
+function saveSession(){
+  if(!RECS.length||SAVE_BROKEN)return;
+  try{
+    const fields={};
+    for(const id of FIELD_IDS)fields[id]=document.getElementById(id)?.value||'';
+    const data={
+      v:1, RECS, CIRCUIT, PCTR, CUR_STEP, OFFSET_PX, fields,
+      PLANS:PLANS.map(p=>({...p,segIds:[...p.segIds]})),
+      opts:{
+        tile:document.getElementById('opt-tile').value,
+        offset:document.getElementById('opt-offset').value,
+        labels:document.getElementById('opt-labels').checked,
+        arrows:document.getElementById('opt-arrows').checked,
+      },
+    };
+    localStorage.setItem(SESSION_KEY,JSON.stringify(data));
+  }catch(e){
+    SAVE_BROKEN=true; // session trop volumineuse ou quota atteint : on arrête d'insister
+    console.warn('Sauvegarde de session désactivée (quota localStorage atteint) :',e);
+  }
+}
+function clearSessionStorage(){
+  try{localStorage.removeItem(SESSION_KEY);}catch(e){}
+}
+function startOver(){
+  if(!confirm('Effacer la session en cours et repartir de zéro ?'))return;
+  clearSessionStorage();
+  location.reload();
+}
+function restoreSession(){
+  const data=window.__SAVED_SESSION;
+  if(!data)return;
+  RECS=data.RECS||[];
+  CIRCUIT=data.CIRCUIT||'';
+  PCTR=data.PCTR||0;
+  OFFSET_PX=data.OFFSET_PX||6;
+  PLANS=(data.PLANS||[]).map(p=>({...p,segIds:new Set(p.segIds)}));
+  for(const [id,val] of Object.entries(data.fields||{})){
+    const el=document.getElementById(id);if(el)el.value=val;
+  }
+  if(data.opts){
+    document.getElementById('opt-tile').value=data.opts.tile||'topo';
+    document.getElementById('opt-offset').value=data.opts.offset||'6';
+    document.getElementById('opt-labels').checked=data.opts.labels!==false;
+    document.getElementById('opt-arrows').checked=data.opts.arrows!==false;
+    setTile(data.opts.tile||'topo');
+  }
+  showInfo(RECS);
+  buildLayers(RECS);
+  renderPlans();refreshColors();
+  document.getElementById('restore-overlay').classList.remove('show');
+  document.getElementById('hdr-reset-btn').style.display='inline-block';
+  goStep(data.CUR_STEP&&data.CUR_STEP>=2?data.CUR_STEP:2);
+}
+function discardSession(){
+  clearSessionStorage();
+  document.getElementById('restore-overlay').classList.remove('show');
+}
+(function checkSavedSession(){
+  try{
+    const raw=localStorage.getItem(SESSION_KEY);
+    if(!raw)return;
+    const data=JSON.parse(raw);
+    if(!data?.RECS?.length)return;
+    window.__SAVED_SESSION=data;
+    document.getElementById('restore-msg').textContent=
+      `Circuit "${data.CIRCUIT||'—'}" — ${data.RECS.length} tronçons, ${(data.PLANS||[]).length} plan(s).`;
+    document.getElementById('restore-overlay').classList.add('show');
+  }catch(e){}
+})();
+FIELD_IDS.forEach(id=>document.getElementById(id)?.addEventListener('input',scheduleSave));
+
+// ═══════════════════════════════════════════════════════
 // CARTE
 // ═══════════════════════════════════════════════════════
 MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
-setTile('osm');
+setTile('topo');
 MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
-document.getElementById('opt-tile').addEventListener('change',e=>setTile(e.target.value));
-document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();});
+document.getElementById('opt-tile').addEventListener('change',e=>{setTile(e.target.value);scheduleSave();});
+document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();scheduleSave();});
+document.getElementById('opt-labels').addEventListener('change',scheduleSave);
+document.getElementById('opt-arrows').addEventListener('change',scheduleSave);
 
 function setTile(k){
   if(TILE_LYR)MAP.removeLayer(TILE_LYR);
@@ -393,12 +624,14 @@ function goStep(n){
       s.classList.toggle('done',i+1<n);
     });
     document.querySelectorAll('.sb-panel').forEach((p,i)=>p.classList.toggle('active',i+1===n));
-    const lbl=document.getElementById('btn-next-label');
-    const btn=document.getElementById('btn-print');
-    if(n===3){lbl.textContent='Prêt à imprimer';btn.style.display='block';}
-    else{lbl.textContent='Suivant →';btn.style.display='none';}
+    const nextBtn=document.getElementById('btn-next');
+    const printBtn=document.getElementById('btn-print');
+    if(n===3){nextBtn.style.display='none';printBtn.style.display='block';updatePrintSummary();}
+    else{nextBtn.style.display='block';printBtn.style.display='none';}
     document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
+    document.getElementById('seg-search').style.display=n===2?'flex':'none';
     if(n!==2)deactivatePlan();
+    scheduleSave();
   }
 }
 function nextStep(){
@@ -427,13 +660,22 @@ async function load(file){
     RECS=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
     CIRCUIT=RECS[0]?.nomcircuit||'Circuit';
     document.getElementById('f-tournee').value=CIRCUIT;
+    document.getElementById('f-commune').value=guessCommune(RECS);
     showInfo(RECS);
     buildLayers(RECS);
     PLANS=[];PCTR=0;
-    // Un plan par défaut avec tous les tronçons
-    addPlan(true);
+    // Découpage automatique par défaut : des plans prêts à l'emploi dès l'import
+    autoSplit();
     goStep(2);
+    document.getElementById('hdr-reset-btn').style.display='inline-block';
   }catch(e){alert('Erreur: '+e.message);console.error(e);}
+}
+
+function guessCommune(recs){
+  const cnt={};
+  for(const r of recs)if(r.commune)cnt[r.commune]=(cnt[r.commune]||0)+1;
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+  return top?top[0]:'';
 }
 
 function readSHP(buf){
@@ -491,17 +733,17 @@ function showInfo(recs){
 // ═══════════════════════════════════════════════════════
 // COUCHES LEAFLET
 // ═══════════════════════════════════════════════════════
-function offsetPoly(pts,px){
+function offsetPoly(map,pts,px){
   if(!px||pts.length<2)return pts;
   return pts.map((pt,i)=>{
     const prev=pts[Math.max(0,i-1)],next=pts[Math.min(pts.length-1,i+1)];
-    const pp=MAP.latLngToContainerPoint(L.latLng(prev[0],prev[1]));
-    const pn=MAP.latLngToContainerPoint(L.latLng(next[0],next[1]));
+    const pp=map.latLngToContainerPoint(L.latLng(prev[0],prev[1]));
+    const pn=map.latLngToContainerPoint(L.latLng(next[0],next[1]));
     const dx=pn.x-pp.x,dy=pn.y-pp.y,len=Math.sqrt(dx*dx+dy*dy)||1;
     const nx=dy/len,ny=-dx/len;
-    const pc=MAP.latLngToContainerPoint(L.latLng(pt[0],pt[1]));
+    const pc=map.latLngToContainerPoint(L.latLng(pt[0],pt[1]));
     const po=L.point(pc.x+nx*px,pc.y+ny*px);
-    const ll=MAP.containerPointToLatLng(po);
+    const ll=map.containerPointToLatLng(po);
     return[ll.lat,ll.lng];
   });
 }
@@ -514,7 +756,7 @@ function buildLayers(recs){
     for(const r of recs.filter(r=>r.nomactiv===order)){
       if(!r.points||r.points.length<2)continue;
       try{
-        const pts=cfg.offset?offsetPoly(r.points,OFFSET_PX):r.points;
+        const pts=cfg.offset?offsetPoly(MAP,r.points,OFFSET_PX):r.points;
         const lines=[];
         if(!cfg.dash)lines.push(L.polyline(pts,{color:'white',weight:cfg.w*2+2,opacity:.6,interactive:false}).addTo(MAP));
         const line=L.polyline(pts,{color:cfg.color,weight:cfg.w,dashArray:cfg.dash?'7 5':null,opacity:.9,interactive:true}).addTo(MAP);
@@ -543,7 +785,7 @@ function buildLayers(recs){
 function rebuildOffset(){
   for(const [id,s] of Object.entries(SEG)){
     const cfg=ACT[s.rec.nomactiv];if(!cfg?.offset)continue;
-    const pts=offsetPoly(s.rec.points,OFFSET_PX);
+    const pts=offsetPoly(MAP,s.rec.points,OFFSET_PX);
     s.lines.forEach(l=>l.setLatLngs(pts));
     const mid=pts[Math.floor(pts.length/2)];
     if(s.lblMk)s.lblMk.setLatLng(mid);
@@ -558,11 +800,15 @@ function addPlan(allTroncons=false){
   const id=++PCTR;
   const color=SWATCHES[(PLANS.length)%SWATCHES.length];
   const ids=RECS.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
-  const segIds=allTroncons?new Set(RECS.map(r=>r.idtroncon)):new Set();
+  let segIds=new Set(),rangeFrom=ids[0]||1,rangeTo=ids[ids.length-1]||1;
+  if(allTroncons){
+    const ov=overviewSegIds();
+    segIds=ov.segIds;rangeFrom=ov.first;rangeTo=ov.last;
+  }
   const plan={id,name:allTroncons?'Plan général':`Plan ${id}`,color,segIds,
-    rangeFrom:ids[0]||1,rangeTo:ids[ids.length-1]||1,mode:'range'};
+    rangeFrom,rangeTo,mode:'range',orientation:'auto'};
   PLANS.push(plan);
-  renderPlans();refreshColors();
+  renderPlans();refreshColors();updatePrintSummary();
   if(!allTroncons)activatePlan(plan,'lasso');
   return plan;
 }
@@ -570,30 +816,153 @@ function addPlan(allTroncons=false){
 function removePlan(id){
   if(ACTIVE_PLAN?.id===id)deactivatePlan();
   PLANS=PLANS.filter(p=>p.id!==id);
-  renderPlans();refreshColors();
+  renderPlans();refreshColors();updatePrintSummary();
 }
 
 function gp(id){return PLANS.find(p=>p.id===id);}
 
+// Longueur d'un tronçon (mètres) via la formule de haversine, pour jauger la densité du circuit
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000,toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function segmentLength(pts){
+  let d=0;
+  for(let i=1;i<pts.length;i++)d+=haversine(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
+  return d;
+}
+// Nombre de tronçons qu'un plan peut accueillir selon la longueur LOCALE du tronçon :
+// courts (zone dense) → moins par page pour rester lisible ; longs (zone étendue) →
+// davantage par page. Calculé tronçon par tronçon (pas sur une moyenne globale), pour
+// bien gérer un circuit qui mêle des zones denses et des zones étendues.
+function targetCountForLen(lenM){
+  if(lenM<=80)return 40;
+  if(lenM>=200)return 75;
+  const t=(lenM-80)/(200-80);
+  return 40+t*(75-40);
+}
+// Segments "vue d'ensemble" : tout le circuit, hors haut-le-pied de tête (avant le
+// tout premier tronçon de collecte) et de queue (après le tout dernier) — ce sont des
+// trajets d'accès/retour au dépôt, pas des tronçons de la tournée proprement dite.
+function overviewSegIds(){
+  const firstIdx=RECS.findIndex(r=>r.nomactiv!=='Haut le pied');
+  if(firstIdx<0)return{segIds:new Set(),first:1,last:1};
+  let lastIdx=firstIdx;
+  for(let k=RECS.length-1;k>=0;k--){if(RECS[k].nomactiv!=='Haut le pied'){lastIdx=k;break;}}
+  const segIds=new Set();
+  for(let k=firstIdx;k<=lastIdx;k++)segIds.add(RECS[k].idtroncon);
+  return{segIds,first:parseInt(RECS[firstIdx].idtroncon),last:parseInt(RECS[lastIdx].idtroncon)};
+}
 function autoSplit(){
-  // Découpe automatique : 1 plan par tranche de ~60 tronçons de collecte
-  const collecte=RECS.filter(r=>r.nomactiv!=='Haut le pied');
-  const hlp=RECS.filter(r=>r.nomactiv==='Haut le pied');
-  const size=Math.ceil(collecte.length/Math.ceil(collecte.length/60));
   PLANS=[];PCTR=0;
-  for(let i=0;i<collecte.length;i+=size){
-    const slice=collecte.slice(i,i+size);
-    const first=parseInt(slice[0].idtroncon),last=parseInt(slice[slice.length-1].idtroncon);
-    const p=addPlanSilent(`Plan ${PLANS.length+1}`,new Set([...slice.map(r=>r.idtroncon),...hlp.map(r=>r.idtroncon)]));
+  const collecteIdx=[];
+  RECS.forEach((r,idx)=>{if(r.nomactiv!=='Haut le pied')collecteIdx.push(idx);});
+  if(!collecteIdx.length){renderPlans();refreshColors();updatePrintSummary();showAutoSplitNote(null,[],[]);return;}
+  const lens=RECS.map(r=>segmentLength(r.points));
+  const sizes=[];
+  let ptr=0;
+  while(ptr<collecteIdx.length){
+    // Accumule des tronçons jusqu'à remplir la "capacité" d'une page (budget=1) : chaque
+    // tronçon consomme plus ou moins de budget selon sa longueur locale, ET les haut-le-pied
+    // intercalés entre deux tronçons de collecte du même plan comptent aussi dans ce budget
+    // (sinon un gros paquet de haut-le-pied ferait exploser la taille du plan sans être vu).
+    let acc=0,scan=collecteIdx[ptr],endPtr=ptr,lastRecIdx=collecteIdx[ptr];
+    while(endPtr<collecteIdx.length&&acc<1&&(endPtr-ptr)<90){
+      const recIdx=collecteIdx[endPtr];
+      for(let k=scan;k<=recIdx;k++)acc+=1/targetCountForLen(lens[k]||150);
+      lastRecIdx=recIdx;
+      scan=recIdx+1;
+      endPtr++;
+    }
+    const first=parseInt(RECS[collecteIdx[ptr]].idtroncon),last=parseInt(RECS[lastRecIdx].idtroncon);
+    const segIds=new Set();
+    for(let k=collecteIdx[ptr];k<=lastRecIdx;k++)segIds.add(RECS[k].idtroncon);
+    const p=addPlanSilent(`Plan ${PLANS.length+1}`,segIds);
     p.rangeFrom=first;p.rangeTo=last;
+    sizes.push(endPtr-ptr);
+    ptr=endPtr;
   }
-  renderPlans();refreshColors();
+  // Évite un dernier plan anormalement petit (simple reliquat de fin de circuit) :
+  // on le fusionne avec le plan précédent plutôt que de générer une page à 1-2 tronçons.
+  if(PLANS.length>=2){
+    const lastSize=sizes[sizes.length-1],prevSize=sizes[sizes.length-2];
+    if(lastSize<15||lastSize<prevSize*0.4){
+      const last=PLANS.pop();
+      const prev=PLANS[PLANS.length-1];
+      for(const id of last.segIds)prev.segIds.add(id);
+      prev.rangeTo=last.rangeTo;
+      sizes[sizes.length-2]+=sizes.pop();
+    }
+  }
+  // Vue d'ensemble en tête de liste : tout le circuit (hlp de tête/queue exclus),
+  // en plus des plans par zone — pour une page de contexte avant le détail.
+  const ov=overviewSegIds();
+  PLANS.unshift({id:++PCTR,name:"Vue d'ensemble",color:'#2c3e50',segIds:ov.segIds,
+    rangeFrom:ov.first,rangeTo:ov.last,mode:'range',orientation:'auto'});
+
+  renderPlans();refreshColors();updatePrintSummary();
+  const collecteLens=collecteIdx.map(idx=>lens[idx]);
+  const avgLen=collecteLens.reduce((a,b)=>a+b,0)/collecteLens.length;
+  showAutoSplitNote(avgLen,collecteLens,sizes);
+}
+function showAutoSplitNote(avgLen,lens,sizes){
+  const el=document.getElementById('autosplit-note');
+  if(!el)return;
+  if(!avgLen||!sizes.length){el.style.display='none';return;}
+  const n=sizes.length;
+  // Homogénéité jugée sur la dispersion RÉELLE des longueurs de tronçons (percentiles),
+  // pas sur la taille des plans en sortie : le dernier plan est souvent un reliquat plus
+  // petit sans que ça signifie une densité variable.
+  const sorted=[...lens].sort((a,b)=>a-b);
+  const p10=sorted[Math.floor(sorted.length*0.1)];
+  const p90=sorted[Math.floor(sorted.length*0.9)];
+  const homogene=p90<=Math.max(p10*3,p10+40);
+  if(homogene){
+    const avgSize=Math.round(sizes.reduce((a,b)=>a+b,0)/n);
+    const density=avgLen<80?`dense (tronçons courts, ≈${Math.round(avgLen)}m en moyenne)`
+      :avgLen<200?`de densité mixte (≈${Math.round(avgLen)}m en moyenne)`
+      :`étendu (tronçons longs, ≈${Math.round(avgLen)}m en moyenne)`;
+    el.innerHTML=`💡 Circuit ${density} → <strong>${n} plan${n>1?'s':''}</strong> suggéré${n>1?'s':''} de ~${avgSize} tronçons chacun. Estimation ajustable ci-dessous.`;
+  }else{
+    const min=Math.min(...sizes),max=Math.max(...sizes);
+    el.innerHTML=`💡 Densité variable selon les zones → <strong>${n} plans</strong> suggérés, de ${min} à ${max} tronçons chacun (moins dans les zones denses, plus dans les zones étendues). Estimation ajustable ci-dessous.`;
+  }
+  el.style.display='block';
+}
+function mergeAll(){
+  if(!RECS.length)return;
+  PLANS=[];PCTR=0;
+  addPlan(true);
+  document.getElementById('autosplit-note').style.display='none';
 }
 function addPlanSilent(name,segIds){
   const id=++PCTR,color=SWATCHES[(PLANS.length)%SWATCHES.length];
   const ids=RECS.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
-  const plan={id,name,color,segIds,rangeFrom:ids[0]||1,rangeTo:ids[ids.length-1]||1,mode:'range'};
+  const plan={id,name,color,segIds,rangeFrom:ids[0]||1,rangeTo:ids[ids.length-1]||1,mode:'range',orientation:'auto'};
   PLANS.push(plan);return plan;
+}
+
+// ── Orientation A3 auto (paysage/portrait) selon l'emprise des tronçons ──
+function computeAutoOrientation(segIds){
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  for(const id of segIds){
+    const s=SEG[id];if(!s)continue;
+    for(const [la,lo] of s.rec.points){
+      if(la<minLat)minLat=la;if(la>maxLat)maxLat=la;
+      if(lo<minLon)minLon=lo;if(lo>maxLon)maxLon=lo;
+    }
+  }
+  if(!isFinite(minLat))return 'landscape';
+  const avgLat=(minLat+maxLat)/2;
+  const widthM=(maxLon-minLon)*111320*Math.cos(avgLat*Math.PI/180);
+  const heightM=(maxLat-minLat)*110540;
+  return widthM>=heightM?'landscape':'portrait';
+}
+function planOrientation(p){
+  if(p.orientation&&p.orientation!=='auto')return p.orientation;
+  return computeAutoOrientation(p.segIds);
 }
 
 function applyRange(pid){
@@ -643,16 +1012,23 @@ function renderPlans(){
   for(const p of PLANS){
     const isActive=ACTIVE_PLAN?.id===p.id;
     const nCollecte=[...p.segIds].filter(id=>{const r=RECS.find(r=>r.idtroncon===id);return r&&r.nomactiv!=='Haut le pied';}).length;
+    const orient=planOrientation(p);
     const d=document.createElement('div');
     d.className='plan-card'+(isActive?' editing':'');
     d.innerHTML=`
 <div class="plan-head" onclick="togglePlanBody(${p.id})">
-  <div class="plan-swatch" style="background:${p.color}" onclick="event.stopPropagation();cycleSwatch(${p.id})" title="Changer la couleur"></div>
-  <input class="plan-name-inp" value="${p.name}" oninput="gp(${p.id}).name=this.value" onclick="event.stopPropagation()">
-  <span class="plan-badge${nCollecte>0?' green':''}">${p.segIds.size} tronçons</span>
-  <div class="plan-actions">
-    <button class="icon-btn" onclick="event.stopPropagation();zoomPlan(${p.id})" title="Centrer">🎯</button>
-    <button class="icon-btn" onclick="event.stopPropagation();removePlan(${p.id})" title="Supprimer">✕</button>
+  <div class="plan-head-row1">
+    <span class="drag-handle" draggable="true" ondragstart="planDragStart(event,${p.id})" ondragend="planDragEnd(event)" onclick="event.stopPropagation()" title="Glisser pour réordonner">⠿</span>
+    <div class="plan-swatch" style="background:${p.color}" onclick="event.stopPropagation();cycleSwatch(${p.id})" title="Changer la couleur"></div>
+    <input class="plan-name-inp" value="${p.name}" oninput="gp(${p.id}).name=this.value" onclick="event.stopPropagation()">
+    <div class="plan-actions">
+      <button class="icon-btn" onclick="event.stopPropagation();zoomPlan(${p.id})" title="Centrer">🎯</button>
+      <button class="icon-btn" onclick="event.stopPropagation();removePlan(${p.id})" title="Supprimer">✕</button>
+    </div>
+  </div>
+  <div class="plan-head-row2">
+    <span class="orient-pill" title="Orientation A3 détectée automatiquement (modifiable dans le détail du plan)">${orient==='landscape'?'Paysage':'Portrait'}</span>
+    <span class="plan-badge${nCollecte>0?' green':''}">${p.segIds.size} tronçons</span>
   </div>
 </div>
 <div class="plan-body" id="pbody-${p.id}" style="display:${isActive?'block':'none'}">
@@ -666,6 +1042,15 @@ function renderPlans(){
     <div class="sel-mode${p.mode==='click'?' on':''}" onclick="setPlanMode(${p.id},'click')">
       <span class="sm-icon">👆</span>Clic
     </div>
+  </div>
+
+  <div class="range-row" style="margin-bottom:10px">
+    <label style="min-width:56px">Format A3</label>
+    <select class="orient-select" onchange="event.stopPropagation();gp(${p.id}).orientation=this.value;renderPlans();updatePrintSummary()">
+      <option value="auto"${p.orientation==='auto'?' selected':''}>Auto (${orient==='landscape'?'paysage':'portrait'} détecté)</option>
+      <option value="landscape"${p.orientation==='landscape'?' selected':''}>Forcer paysage</option>
+      <option value="portrait"${p.orientation==='portrait'?' selected':''}>Forcer portrait</option>
+    </select>
   </div>
 
   ${p.mode==='range'?`
@@ -706,8 +1091,35 @@ function renderPlans(){
   </div>
   <button class="btn-sm danger" style="width:100%;justify-content:center;margin-top:8px" onclick="gp(${p.id}).segIds.clear();renderPlans();refreshColors()">🗑 Vider la sélection</button>
 </div>`;
+    d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('drag-over');});
+    d.addEventListener('dragleave',()=>d.classList.remove('drag-over'));
+    d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('drag-over');dropPlanOnto(p.id);});
     list.appendChild(d);
   }
+  scheduleSave();
+}
+
+// ── Réordonnancement des plans par glisser-déposer ──
+let DRAG_PLAN_ID=null;
+function planDragStart(e,id){
+  DRAG_PLAN_ID=id;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',String(id));
+  e.target.closest('.plan-card')?.classList.add('dragging');
+}
+function planDragEnd(e){
+  e.target.closest('.plan-card')?.classList.remove('dragging');
+}
+function dropPlanOnto(targetId){
+  const fromId=DRAG_PLAN_ID;
+  DRAG_PLAN_ID=null;
+  if(fromId==null||fromId===targetId)return;
+  const fromIdx=PLANS.findIndex(p=>p.id===fromId);
+  const toIdx=PLANS.findIndex(p=>p.id===targetId);
+  if(fromIdx<0||toIdx<0)return;
+  const [moved]=PLANS.splice(fromIdx,1);
+  PLANS.splice(toIdx,0,moved);
+  renderPlans();refreshColors();
 }
 
 function togglePlanBody(pid){
@@ -764,6 +1176,24 @@ function onSegClick(id){
   const p=ACTIVE_PLAN;
   if(p.segIds.has(id))p.segIds.delete(id);else p.segIds.add(id);
   renderPlans();refreshColors();
+}
+
+// Recherche rapide d'un tronçon par n°
+function findSegment(){
+  const box=document.getElementById('seg-search');
+  const raw=document.getElementById('seg-search-input').value.trim();
+  if(!raw)return;
+  const s=SEG[raw];
+  if(!s){
+    box.classList.remove('not-found');void box.offsetWidth;box.classList.add('not-found');
+    return;
+  }
+  MAP.fitBounds(s.rec.points,{padding:[160,160],maxZoom:18,animate:true});
+  const cfg=ACT[s.rec.nomactiv]||ACT['Haut le pied'];
+  const mainLine=s.lines[s.lines.length-1];
+  mainLine.setStyle({weight:cfg.w+6,opacity:1,color:'#f39c12'});
+  mainLine.openTooltip();
+  setTimeout(refreshColors,1300);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -852,8 +1282,73 @@ function refreshColors(){
 }
 
 // ═══════════════════════════════════════════════════════
-// IMPRESSION — window.print() avec @media print
+// RÉCAPITULATIF AVANT EXPORT
 // ═══════════════════════════════════════════════════════
+function updatePrintSummary(){
+  const el=document.getElementById('print-summary');
+  if(!el)return;
+  const active=PLANS.filter(p=>p.segIds.size>0);
+  if(!active.length){el.textContent='Aucun plan avec des tronçons pour le moment.';document.getElementById('print-thumbs').innerHTML='';return;}
+  const land=active.filter(p=>planOrientation(p)==='landscape').length;
+  const port=active.length-land;
+  const parts=[];
+  if(land)parts.push(`${land} en A3 paysage`);
+  if(port)parts.push(`${port} en A3 portrait`);
+  el.innerHTML=`🖨 <strong>${active.length} plan${active.length>1?'s':''}</strong> prêt${active.length>1?'s':''} à l'impression — ${parts.join(' · ')}.`;
+  renderThumbnails(active);
+}
+
+// Aperçus miniatures (SVG léger, pas de carte Leaflet) de chaque plan avant export
+function renderThumbnails(active){
+  const wrap=document.getElementById('print-thumbs');
+  if(!wrap)return;
+  wrap.innerHTML=active.map(p=>{
+    const orient=planOrientation(p);
+    const w=orient==='landscape'?110:78, h=orient==='landscape'?78:110;
+    let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+    const segs=[];
+    for(const id of p.segIds){
+      const s=SEG[id];if(!s)continue;
+      segs.push(s.rec);
+      for(const [la,lo] of s.rec.points){
+        if(la<minLat)minLat=la;if(la>maxLat)maxLat=la;
+        if(lo<minLon)minLon=lo;if(lo>maxLon)maxLon=lo;
+      }
+    }
+    let lines='';
+    if(isFinite(minLat)){
+      const pad=5;
+      const spanLat=(maxLat-minLat)||0.0001, spanLon=(maxLon-minLon)||0.0001;
+      const scale=Math.min((w-pad*2)/spanLon,(h-pad*2)/spanLat);
+      const offX=(w-spanLon*scale)/2, offY=(h-spanLat*scale)/2;
+      const X=lo=>offX+(lo-minLon)*scale;
+      const Y=la=>h-(offY+(la-minLat)*scale);
+      for(const r of segs){
+        const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
+        const pts=r.points.map(([la,lo])=>`${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join(' ');
+        lines+=`<polyline points="${pts}" fill="none" stroke="${cfg.color}" stroke-width="${cfg.dash?1:1.6}" stroke-dasharray="${cfg.dash?'3 2':''}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+    }
+    return `
+<div class="thumb-card" onclick="goStep(2);zoomPlan(${p.id})" title="Voir ${p.name} sur la carte">
+  <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="background:#eef1f6;border-radius:4px;display:block">${lines}</svg>
+  <div class="thumb-label"><span class="thumb-swatch" style="background:${p.color}"></span>${p.name}<span class="thumb-orient">${orient==='landscape'?'(P)':'(V)'}</span></div>
+</div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// IMPRESSION — window.print() avec @media print, orientation A3 auto
+// ═══════════════════════════════════════════════════════
+function waitTilesLoaded(tileLayer){
+  return new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{if(done)return;done=true;resolve();};
+    tileLayer.once('load',finish);
+    setTimeout(finish,2000); // garde-fou si un tuile ne répond jamais
+  });
+}
+
 async function doPrint(){
   const active=PLANS.filter(p=>p.segIds.size>0);
   if(!active.length){alert('Aucun tronçon dans les plans.');return;}
@@ -869,6 +1364,8 @@ async function doPrint(){
 
   const tileKey=document.getElementById('opt-tile').value;
   const tileUrl=TILES[tileKey];
+  const showLabels=document.getElementById('opt-labels').checked;
+  const showArrows=document.getElementById('opt-arrows').checked;
 
   for(let i=0;i<active.length;i++){
     const plan=active[i];
@@ -876,18 +1373,11 @@ async function doPrint(){
     document.getElementById('gen-prog').style.width=pct+'%';
     document.getElementById('gen-msg').textContent=`Page ${i+1}/${active.length}…`;
 
+    const orient=planOrientation(plan);
+
     // Collect recs du plan
     const mapRecs=RECS.filter(r=>plan.segIds.has(r.idtroncon));
     const presentActs=[...new Set(mapRecs.map(r=>r.nomactiv))];
-
-    // Bbox pour centre de carte
-    let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
-    for(const r of mapRecs)for(const [la,lo] of r.points){minLat=Math.min(minLat,la);maxLat=Math.max(maxLat,la);minLon=Math.min(minLon,lo);maxLon=Math.max(maxLon,lo);}
-    const cLat=(minLat+maxLat)/2,cLon=(minLon+maxLon)/2;
-
-    // Calcul zoom auto (approx)
-    const latSpan=maxLat-minLat, lonSpan=maxLon-minLon;
-    const zoom=Math.max(10,Math.min(16,Math.floor(Math.log2(360/Math.max(latSpan,lonSpan)*0.6))));
 
     // Légende HTML
     const legDefs=[
@@ -902,13 +1392,23 @@ async function doPrint(){
   </svg>${name}
 </div>`).join('');
 
-    // Page HTML
+    // Page HTML — .pp-inner porte le format A3 réel du contenu (paysage ou portrait,
+    // pivoté au print) ; .print-page reste toujours au format papier physique (paysage).
     const page=document.createElement('div');
-    page.className='print-page';
+    page.className='print-page orient-'+orient;
     page.innerHTML=`
-<div class="pp-header">Plan de collecte</div>
+<div class="pp-inner">
+<div class="pp-header">
+  <div class="pp-swatch" style="background:${plan.color}"></div>
+  <div class="pp-titles">
+    <div class="pp-plan-name">${plan.name}</div>
+    <div class="pp-sub">Plan de collecte — ${g('f-tournee')||CIRCUIT}</div>
+  </div>
+  <div class="pp-pagenum">Page ${i+1}/${active.length}</div>
+</div>
 <div class="pp-map">
   <div id="pmap-${i}" class="pp-leaflet"></div>
+  ${g('f-commune')?`<div class="pp-watermark"><span>${g('f-commune')}</span></div>`:''}
 </div>
 <div class="pp-footer">
   <div class="pp-credits">
@@ -920,6 +1420,7 @@ async function doPrint(){
     <h4>Informations sur la tournée</h4>
     <div class="pp-info-grid">
       <div>Tournée : <strong>${g('f-tournee')}</strong></div>
+      <div>Commune : <strong>${g('f-commune')}</strong></div>
       <div>Période : <strong>${g('f-periode')}</strong></div>
       <div>Fréquence : <strong>${g('f-freq')}</strong></div>
       <div>Saison : <strong>${g('f-saison')}</strong></div>
@@ -927,7 +1428,6 @@ async function doPrint(){
       <div>Type semaine : <strong>${g('f-semaine')}</strong></div>
       <div>Jour : <strong>${g('f-jour')}</strong></div>
       <div>Flux collecté : <strong>${g('f-flux')}</strong></div>
-      <div>Version : <strong></strong></div>
     </div>
   </div>
   <div class="pp-legend">
@@ -938,9 +1438,11 @@ async function doPrint(){
       Départ
     </div>
   </div>
-  <div class="pp-logos" style="font-size:10pt;font-weight:900;color:#005a9e;text-align:center">
-    PAPREC<br><span style="font-size:7pt;font-weight:normal;color:#999">Syvalorm · COVED</span>
+  <div class="pp-logos">
+    ${LOGO_DATA?`<img src="${LOGO_DATA}" alt="Logo collectivité">`:''}
+    <div class="pp-brand">PAPREC<span>Syvalorm · COVED</span></div>
   </div>
+</div>
 </div>`;
     container.appendChild(page);
 
@@ -949,18 +1451,40 @@ async function doPrint(){
     const mapDiv=document.getElementById('pmap-'+i);
     if(!mapDiv)continue;
     const pmap=L.map(mapDiv,{zoomControl:false,attributionControl:true,preferCanvas:true,fadeAnimation:false,zoomAnimation:false});
-    L.tileLayer(tileUrl,{maxZoom:19}).addTo(pmap);
+    const pTiles=L.tileLayer(tileUrl,{maxZoom:19}).addTo(pmap);
 
-    // Tronçons
+    // Centrer la carte AVANT de tracer les tronçons : l'offset latéral a besoin d'une
+    // projection déjà valide (zoom/centre définis) pour convertir lat/lon ↔ pixels.
+    const bnd=mapRecs.reduce((a,r)=>[...a,...r.points],[]);
+    if(bnd.length)pmap.fitBounds(bnd,{padding:[20,20],animate:false});
+    pmap.invalidateSize();
+
+    // Un tronçon sur 5 (dans l'ordre du circuit) porte une étiquette, pour ne pas
+    // surcharger la carte imprimée — les autres restent identifiables via leur position.
+    const labelableIds=mapRecs.filter(r=>!ACT[r.nomactiv]?.dash).sort((a,b)=>parseInt(a.idtroncon)-parseInt(b.idtroncon));
+    const showLabelSet=new Set(labelableIds.filter((r,i)=>i%5===0).map(r=>r.idtroncon));
+
+    // Tronçons (avec le même offset latéral que sur la carte d'édition)
     for(const order of ACT_ORDER){
       const cfg=ACT[order];
       for(const r of mapRecs.filter(r=>r.nomactiv===order)){
-        if(!cfg.dash)L.polyline(r.points,{color:'white',weight:cfg.w*2+2,opacity:.7,interactive:false}).addTo(pmap);
-        L.polyline(r.points,{color:cfg.color,weight:cfg.w,dashArray:cfg.dash?'8 6':null,opacity:1,interactive:false}).addTo(pmap);
-        if(!cfg.dash&&r.idtroncon){
-          const mid=r.points[Math.floor(r.points.length/2)];
-          const txt=String(r.idtroncon);const tw=txt.length*7+10;
-          L.marker(mid,{icon:L.divIcon({html:`<div style="background:${cfg.color};color:white;font-size:10px;font-weight:700;padding:2px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.4);">${txt}</div>`,className:'',iconAnchor:[tw/2,10]}),interactive:false}).addTo(pmap);
+        const pts=cfg.offset?offsetPoly(pmap,r.points,OFFSET_PX):r.points;
+        if(!cfg.dash)L.polyline(pts,{color:'white',weight:cfg.w*2+2,opacity:.7,interactive:false}).addTo(pmap);
+        L.polyline(pts,{color:cfg.color,weight:cfg.w,dashArray:cfg.dash?'8 6':null,opacity:1,interactive:false}).addTo(pmap);
+        if(!cfg.dash&&r.idtroncon&&pts.length>=2){
+          const mid=pts[Math.floor(pts.length/2)];
+          if(showLabels&&showLabelSet.has(r.idtroncon)){
+            // Taille de conteneur EXPLICITE (iconSize) plutôt qu'une largeur estimée pour
+            // l'ancrage seul : sans ça, Leaflet retombe sur sa taille par défaut (12x12px)
+            // et le fond coloré ne recouvre pas tout le texte, qui déborde alors visuellement.
+            const txt=String(r.idtroncon);const tw=txt.length*11+22,th=28;
+            L.marker(mid,{icon:L.divIcon({html:`<div style="width:100%;height:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:${cfg.color};color:white;font-size:16px;font-weight:800;border-radius:6px;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,.5);white-space:nowrap;">${txt}</div>`,className:'',iconSize:[tw,th],iconAnchor:[tw/2,th/2]}),interactive:false}).addTo(pmap);
+          }
+          if(showArrows){
+            const i0=Math.max(0,Math.floor(pts.length/2)-1),i1=Math.floor(pts.length/2);
+            const ang=Math.atan2(pts[i1][0]-pts[i0][0],pts[i1][1]-pts[i0][1])*180/Math.PI;
+            L.marker(mid,{icon:L.divIcon({html:`<svg width="14" height="14" viewBox="0 0 12 12" style="display:block;transform:rotate(${ang}deg);transform-origin:50% 50%;"><polygon points="6,1 11,11 6,8 1,11" fill="${cfg.color}" stroke="white" stroke-width="1.3" stroke-linejoin="round"/></svg>`,className:'',iconAnchor:[7,20]}),interactive:false}).addTo(pmap);
+          }
         }
       }
     }
@@ -981,15 +1505,14 @@ async function doPrint(){
       onAdd:()=>{const d=L.DomUtil.create('div');d.style.cssText='background:white;border:1px solid #aaa;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#c0392b;box-shadow:0 1px 4px rgba(0,0,0,.2)';d.innerHTML='N↑';return d;}
     });
     new L.Control.Compass({position:'bottomleft'}).addTo(pmap);
+    L.control.scale({metric:true,imperial:false,position:'bottomright'}).addTo(pmap);
 
-    const bnd=mapRecs.reduce((a,r)=>[...a,...r.points],[]);
-    if(bnd.length)pmap.fitBounds(bnd,{padding:[20,20],animate:false});
-    await sleep(100);
+    await waitTilesLoaded(pTiles);
   }
 
   document.getElementById('gen-prog').style.width='95%';
   document.getElementById('gen-msg').textContent='Prêt — la boîte d\'impression va s\'ouvrir…';
-  await sleep(400);
+  await sleep(200);
 
   document.getElementById('gen-overlay').classList.remove('show');
 
