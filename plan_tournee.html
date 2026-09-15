@@ -203,16 +203,16 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 */
 #print-pages{position:relative;}
 .print-page{
+  display:flex;align-items:center;justify-content:center;
   position:absolute;left:-99999px;top:0;
   width:420mm;height:297mm;
   box-sizing:border-box;overflow:hidden;background:white;
   font-family:'Segoe UI',system-ui,sans-serif;
 }
-.pp-inner{display:flex;flex-direction:column;width:420mm;height:297mm;}
+.pp-inner{flex-shrink:0;display:flex;flex-direction:column;width:420mm;height:297mm;}
 .print-page.orient-portrait .pp-inner{
   width:297mm;height:420mm;
-  position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%) rotate(90deg);
+  transform:rotate(90deg);
 }
 
 .pp-header{background:linear-gradient(120deg,#005a9e,#0078be);color:white;display:flex;align-items:center;gap:12px;padding:6mm 10mm;flex-shrink:0;}
@@ -885,6 +885,18 @@ function autoSplit(){
     p.rangeFrom=first;p.rangeTo=last;
     sizes.push(endPtr-ptr);
     ptr=endPtr;
+  }
+  // Évite un dernier plan anormalement petit (simple reliquat de fin de circuit) :
+  // on le fusionne avec le plan précédent plutôt que de générer une page à 1-2 tronçons.
+  if(PLANS.length>=2){
+    const lastSize=sizes[sizes.length-1],prevSize=sizes[sizes.length-2];
+    if(lastSize<15||lastSize<prevSize*0.4){
+      const last=PLANS.pop();
+      const prev=PLANS[PLANS.length-1];
+      for(const id of last.segIds)prev.segIds.add(id);
+      prev.rangeTo=last.rangeTo;
+      sizes[sizes.length-2]+=sizes.pop();
+    }
   }
   // Vue d'ensemble en tête de liste : tout le circuit (hlp de tête/queue exclus),
   // en plus des plans par zone — pour une page de contexte avant le détail.
