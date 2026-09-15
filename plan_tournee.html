@@ -401,9 +401,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     </div>
 
     <div class="sb-foot">
-      <button class="btn-main" id="btn-next" onclick="nextStep()">
-        <span id="btn-next-label">Suivant →</span>
-      </button>
+      <button class="btn-main" id="btn-next" onclick="nextStep()">Suivant →</button>
       <button class="btn-outline" id="btn-print" style="display:none" onclick="doPrint()">
         🖨 Imprimer / Enregistrer en PDF
       </button>
@@ -626,10 +624,10 @@ function goStep(n){
       s.classList.toggle('done',i+1<n);
     });
     document.querySelectorAll('.sb-panel').forEach((p,i)=>p.classList.toggle('active',i+1===n));
-    const lbl=document.getElementById('btn-next-label');
-    const btn=document.getElementById('btn-print');
-    if(n===3){lbl.textContent='Prêt à imprimer';btn.style.display='block';updatePrintSummary();}
-    else{lbl.textContent='Suivant →';btn.style.display='none';}
+    const nextBtn=document.getElementById('btn-next');
+    const printBtn=document.getElementById('btn-print');
+    if(n===3){nextBtn.style.display='none';printBtn.style.display='block';updatePrintSummary();}
+    else{nextBtn.style.display='block';printBtn.style.display='none';}
     document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
     document.getElementById('seg-search').style.display=n===2?'flex':'none';
     if(n!==2)deactivatePlan();
