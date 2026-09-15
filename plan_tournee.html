@@ -378,9 +378,10 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="opt-row">
         <label style="min-width:70px">Fond</label>
         <select id="opt-tile">
-          <option value="osm">OpenStreetMap</option>
-          <option value="carto">CartoDB Voyager</option>
+          <option value="carto" selected>CartoDB Voyager</option>
+          <option value="ign">IGN Plan (France)</option>
           <option value="topo">OpenTopoMap</option>
+          <option value="osm">OpenStreetMap (usage limité, peut être bloqué)</option>
         </select>
       </div>
 
@@ -454,6 +455,8 @@ const TILES={
   osm:  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   carto:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
   topo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  // Géoplateforme IGN (France) — plan officiel, sans clé API pour les couches "essentielles"
+  ign:  'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',
 };
 const SWATCHES=['#e74c3c','#2980b9','#e07b00','#8e44ad','#16a085','#c0392b','#1a6e3c','#2c3e50'];
 
@@ -554,11 +557,11 @@ function restoreSession(){
     const el=document.getElementById(id);if(el)el.value=val;
   }
   if(data.opts){
-    document.getElementById('opt-tile').value=data.opts.tile||'osm';
+    document.getElementById('opt-tile').value=data.opts.tile||'carto';
     document.getElementById('opt-offset').value=data.opts.offset||'6';
     document.getElementById('opt-labels').checked=data.opts.labels!==false;
     document.getElementById('opt-arrows').checked=data.opts.arrows!==false;
-    setTile(data.opts.tile||'osm');
+    setTile(data.opts.tile||'carto');
   }
   showInfo(RECS);
   buildLayers(RECS);
@@ -589,7 +592,7 @@ FIELD_IDS.forEach(id=>document.getElementById(id)?.addEventListener('input',sche
 // CARTE
 // ═══════════════════════════════════════════════════════
 MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
-setTile('osm');
+setTile('carto');
 MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
 document.getElementById('opt-tile').addEventListener('change',e=>{setTile(e.target.value);scheduleSave();});
 document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();scheduleSave();});
