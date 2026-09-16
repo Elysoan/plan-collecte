@@ -389,8 +389,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="opt-row">
         <label style="min-width:70px">Fond</label>
         <select id="opt-tile">
-          <option value="topo" selected>OpenTopoMap</option>
-          <option value="ign">IGN Plan (France)</option>
+          <option value="ign" selected>IGN Plan (France)</option>
+          <option value="esri-gray">Fond épuré (infos réduites)</option>
+          <option value="topo">OpenTopoMap</option>
           <option value="carto">CartoDB Voyager (usage limité, peut être bloqué)</option>
           <option value="osm">OpenStreetMap (usage limité, peut être bloqué)</option>
         </select>
@@ -466,7 +467,12 @@ const TILES={
   topo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
   // Géoplateforme IGN (France) — plan officiel, sans clé API pour les couches "essentielles"
   ign:  'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',
+  // Esri World Light Gray — fond minimaliste (peu de labels/POI), pensé pour superposer des
+  // données par-dessus ; fournisseur différent de CartoDB/OSM, pas soumis aux mêmes blocages.
+  'esri-gray':'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
 };
+// Au-delà de ce niveau natif, Leaflet agrandit les tuiles plutôt que d'en afficher des vides
+const TILE_MAX_NATIVE_ZOOM={'esri-gray':16};
 const SWATCHES=['#e74c3c','#2980b9','#e07b00','#8e44ad','#16a085','#c0392b','#1a6e3c','#2c3e50'];
 
 // ═══════════════════════════════════════════════════════
@@ -566,11 +572,11 @@ function restoreSession(){
     const el=document.getElementById(id);if(el)el.value=val;
   }
   if(data.opts){
-    document.getElementById('opt-tile').value=data.opts.tile||'topo';
+    document.getElementById('opt-tile').value=data.opts.tile||'ign';
     document.getElementById('opt-offset').value=data.opts.offset||'6';
     document.getElementById('opt-labels').checked=data.opts.labels!==false;
     document.getElementById('opt-arrows').checked=data.opts.arrows!==false;
-    setTile(data.opts.tile||'topo');
+    setTile(data.opts.tile||'ign');
   }
   showInfo(RECS);
   buildLayers(RECS);
@@ -601,7 +607,7 @@ FIELD_IDS.forEach(id=>document.getElementById(id)?.addEventListener('input',sche
 // CARTE
 // ═══════════════════════════════════════════════════════
 MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
-setTile('topo');
+setTile('ign');
 MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
 document.getElementById('opt-tile').addEventListener('change',e=>{setTile(e.target.value);scheduleSave();});
 document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();scheduleSave();});
@@ -610,7 +616,7 @@ document.getElementById('opt-arrows').addEventListener('change',scheduleSave);
 
 function setTile(k){
   if(TILE_LYR)MAP.removeLayer(TILE_LYR);
-  TILE_LYR=L.tileLayer(TILES[k],{maxZoom:19,crossOrigin:true}).addTo(MAP);
+  TILE_LYR=L.tileLayer(TILES[k],{maxZoom:19,maxNativeZoom:TILE_MAX_NATIVE_ZOOM[k],crossOrigin:true}).addTo(MAP);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1451,7 +1457,7 @@ async function doPrint(){
     const mapDiv=document.getElementById('pmap-'+i);
     if(!mapDiv)continue;
     const pmap=L.map(mapDiv,{zoomControl:false,attributionControl:true,preferCanvas:true,fadeAnimation:false,zoomAnimation:false});
-    const pTiles=L.tileLayer(tileUrl,{maxZoom:19}).addTo(pmap);
+    const pTiles=L.tileLayer(tileUrl,{maxZoom:19,maxNativeZoom:TILE_MAX_NATIVE_ZOOM[tileKey]}).addTo(pmap);
 
     // Centrer la carte AVANT de tracer les tronçons : l'offset latéral a besoin d'une
     // projection déjà valide (zoom/centre définis) pour convertir lat/lon ↔ pixels.
@@ -1459,10 +1465,10 @@ async function doPrint(){
     if(bnd.length)pmap.fitBounds(bnd,{padding:[20,20],animate:false});
     pmap.invalidateSize();
 
-    // Un tronçon sur 5 (dans l'ordre du circuit) porte une étiquette, pour ne pas
+    // Un tronçon sur 3 (dans l'ordre du circuit) porte une étiquette, pour ne pas
     // surcharger la carte imprimée — les autres restent identifiables via leur position.
     const labelableIds=mapRecs.filter(r=>!ACT[r.nomactiv]?.dash).sort((a,b)=>parseInt(a.idtroncon)-parseInt(b.idtroncon));
-    const showLabelSet=new Set(labelableIds.filter((r,i)=>i%5===0).map(r=>r.idtroncon));
+    const showLabelSet=new Set(labelableIds.filter((r,i)=>i%3===0).map(r=>r.idtroncon));
 
     // Tronçons (avec le même offset latéral que sur la carte d'édition)
     for(const order of ACT_ORDER){
