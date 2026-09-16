@@ -232,7 +232,13 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .pp-footer{flex-shrink:0;border-top:3px solid #0078be;display:grid;
   grid-template-columns:1.8fr 2.6fr 1.8fr 2fr;grid-template-areas:"credits info legend logos";
   column-gap:10px;padding:3mm 10mm;font-size:8pt;min-height:42mm;}
-.print-page.orient-portrait .pp-footer{grid-template-columns:1fr 1fr;grid-template-areas:"credits info" "legend logos";row-gap:10px;column-gap:14px;min-height:58mm;}
+/* Portrait : une grille 2D tourne mal (les paires ligne/colonne se redistribuent de
+   façon peu intuitive après rotation 90°, source de désalignements). On empile donc
+   les 4 blocs en une seule colonne, chacun prenant toute la largeur — après rotation
+   ça devient une seule bande lisible, sans ambiguïté d'alignement possible. */
+.print-page.orient-portrait .pp-footer{display:flex;flex-direction:column;gap:0;padding:4mm 8mm;min-height:70mm;}
+.print-page.orient-portrait .pp-footer>div{border:none!important;padding:6px 0!important;border-top:1px solid #ddd!important;}
+.print-page.orient-portrait .pp-footer>div:first-child{border-top:none!important;padding-top:0!important;}
 
 .pp-credits{grid-area:credits;padding-right:8px;border-right:1px solid #ddd;font-size:6.6pt;color:#555;line-height:1.4;}
 .pp-credits h4{font-weight:700;color:#005a9e;margin-bottom:4px;font-size:7.5pt;text-transform:uppercase;letter-spacing:.03em;}
@@ -249,13 +255,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
    contourné, alors qu'un fond CSS se comporte correctement dans le même contexte. */
 .pp-logos .pp-logo-paprec{width:100%;height:14mm;background-size:contain;background-repeat:no-repeat;background-position:center;}
 .pp-logos .pp-logo-collectivite{width:100%;height:20mm;background-size:contain;background-repeat:no-repeat;background-position:center;border-top:1px solid #e2e2e2;padding-top:8px;}
-/* Après rotation 90°, la grille 2x2 du portrait s'affiche par PAIRES DE COLONNES
-   (et non de lignes) : légende se retrouve à côté de crédits, logos à côté d'infos.
-   Ajouter un border-top/padding-top à un seul des deux d'une paire (comme fait par
-   erreur ici auparavant) désaligne son contenu par rapport à son voisin — la
-   séparation entre les deux paires est déjà assurée par le row-gap, sans besoin
-   de bordure asymétrique. */
-.print-page.orient-portrait .pp-info{border-right:none;}
+.print-page.orient-portrait .pp-logos .pp-logo-collectivite{border-top:none!important;padding-top:0!important;}
+.print-page.orient-portrait .pp-logos{flex-direction:row;justify-content:flex-start;padding:0!important;}
+.print-page.orient-portrait .pp-logos .pp-logo-paprec,.print-page.orient-portrait .pp-logos .pp-logo-collectivite{width:auto;flex:1;height:20mm;}
 
 .pp-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:450;overflow:hidden;}
 .pp-watermark span{font-size:46pt;font-weight:800;color:rgba(0,90,158,.09);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;transform:rotate(-22deg);}
@@ -1365,6 +1367,18 @@ function waitTilesLoaded(tileLayer){
     let done=false;
     const finish=()=>{if(done)return;done=true;resolve();};
     tileLayer.once('load',finish);
+    // Une tuile en échec (erreur réseau ponctuelle, 500, timeout serveur) ne se recharge
+    // jamais toute seule : Leaflet ne réessaie pas par défaut. On force une nouvelle
+    // tentative (jusqu'à 2 fois par tuile) au lieu de laisser un trou blanc définitif.
+    const retries=new WeakMap();
+    tileLayer.on('tileerror',(e)=>{
+      const n=(retries.get(e.tile)||0)+1;
+      retries.set(e.tile,n);
+      if(n<=2){
+        const src=e.tile.src;
+        setTimeout(()=>{e.tile.src='';e.tile.src=src;},400*n);
+      }
+    });
     setTimeout(finish,12000); // garde-fou si une tuile ne répond jamais (certains fonds sont plus lents, ex. IGN sous charge)
   });
 }
