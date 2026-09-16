@@ -186,6 +186,10 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
   body{height:auto;overflow:visible;}
   header,.sb,.map-toolbar,#active-banner,#lasso-svg,.leaflet-control-container,.map-wrap,#gen-overlay{display:none!important;}
   .app{display:block;height:auto;}
+  /* Par défaut, les navigateurs n'impriment PAS les images/couleurs de fond (économie
+     d'encre) sauf instruction explicite — c'est ce qui faisait disparaître les logos
+     (fonds CSS) à l'impression réelle malgré un rendu correct à l'écran. */
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}
 }
 
 /*
@@ -245,7 +249,6 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
    contourné, alors qu'un fond CSS se comporte correctement dans le même contexte. */
 .pp-logos .pp-logo-paprec{width:100%;height:18mm;background-size:contain;background-repeat:no-repeat;background-position:center;}
 .pp-logos .pp-logo-collectivite{width:100%;height:16mm;background-size:contain;background-repeat:no-repeat;background-position:center;border-top:1px solid #e2e2e2;padding-top:8px;}
-.pp-brand-caption{font-size:6pt;font-weight:600;color:#888;letter-spacing:.04em;text-align:center;margin-top:-4px;}
 .print-page.orient-portrait .pp-credits,.print-page.orient-portrait .pp-legend{border-right:none;}
 
 .pp-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:450;overflow:hidden;}
@@ -1356,7 +1359,7 @@ function waitTilesLoaded(tileLayer){
     let done=false;
     const finish=()=>{if(done)return;done=true;resolve();};
     tileLayer.once('load',finish);
-    setTimeout(finish,2000); // garde-fou si un tuile ne répond jamais
+    setTimeout(finish,6000); // garde-fou si une tuile ne répond jamais (certains fonds sont plus lents)
   });
 }
 
@@ -1465,7 +1468,6 @@ async function doPrint(){
   </div>
   <div class="pp-logos">
     <div class="pp-logo-paprec" style="background-image:url('${PAPREC_LOGO}')" role="img" aria-label="Paprec"></div>
-    <div class="pp-brand-caption">Syvalorm · COVED</div>
     ${LOGO_DATA?`<div class="pp-logo-collectivite" style="background-image:url('${LOGO_DATA}')" role="img" aria-label="Logo collectivité"></div>`:''}
   </div>
 </div>
