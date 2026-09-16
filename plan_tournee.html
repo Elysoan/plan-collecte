@@ -403,14 +403,12 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <div class="opt-row">
         <label style="min-width:70px">Fond</label>
         <select id="opt-tile">
-          <option value="ign" selected>IGN Plan (France)</option>
+          <option value="osmfr" selected>OpenStreetMap France</option>
           <option value="ign-cartes">IGN Cartes (style topo classique)</option>
           <option value="esri-street">Esri Plan routier</option>
           <option value="esri-gray">Fond épuré (infos réduites)</option>
           <option value="topo">OpenTopoMap</option>
-          <option value="osmfr">OpenStreetMap France</option>
           <option value="carto">CartoDB Voyager (usage limité, peut être bloqué)</option>
-          <option value="osm">OpenStreetMap (usage limité, peut être bloqué)</option>
         </select>
       </div>
 
@@ -479,12 +477,9 @@ const ACT = {
 };
 const ACT_ORDER=['Haut le pied','Marche arrière','Collecte à droite','Collecte bilatérale'];
 const TILES={
-  osm:  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   carto:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
   topo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-  // Géoplateforme IGN (France) — plan officiel, sans clé API pour les couches "essentielles"
-  ign:  'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png',
-  // Autre couche du même Géoplateforme (les "cartes" IGN, style topo classique) — utile en
+  // Autre couche du même Géoplateforme IGN (les "cartes" IGN, style topo classique) — utile en
   // repli si PLANIGNV2 a un trou de couverture à un endroit/zoom donné, sans changer de fournisseur.
   'ign-cartes':'https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg',
   // Esri World Light Gray — fond minimaliste (peu de labels/POI), pensé pour superposer des
@@ -600,11 +595,11 @@ function restoreSession(){
     const el=document.getElementById(id);if(el)el.value=val;
   }
   if(data.opts){
-    document.getElementById('opt-tile').value=data.opts.tile||'ign';
+    document.getElementById('opt-tile').value=data.opts.tile||'osmfr';
     document.getElementById('opt-offset').value=data.opts.offset||'6';
     document.getElementById('opt-labels').checked=data.opts.labels!==false;
     document.getElementById('opt-arrows').checked=data.opts.arrows!==false;
-    setTile(data.opts.tile||'ign');
+    setTile(data.opts.tile||'osmfr');
   }
   showInfo(RECS);
   buildLayers(RECS);
@@ -635,7 +630,7 @@ FIELD_IDS.forEach(id=>document.getElementById(id)?.addEventListener('input',sche
 // CARTE
 // ═══════════════════════════════════════════════════════
 MAP=L.map('map',{zoomControl:true,preferCanvas:true}).setView([46.8,2.4],6);
-setTile('ign');
+setTile('osmfr');
 MAP.on('zoomend moveend',()=>{if(RECS.length)rebuildOffset();});
 document.getElementById('opt-tile').addEventListener('change',e=>{setTile(e.target.value);scheduleSave();});
 document.getElementById('opt-offset').addEventListener('change',e=>{OFFSET_PX=+e.target.value;if(RECS.length)rebuildOffset();scheduleSave();});
@@ -643,6 +638,7 @@ document.getElementById('opt-labels').addEventListener('change',scheduleSave);
 document.getElementById('opt-arrows').addEventListener('change',scheduleSave);
 
 function setTile(k){
+  if(!TILES[k])k='osmfr'; // repli si une session sauvegardée référence un fond retiré depuis
   if(TILE_LYR)MAP.removeLayer(TILE_LYR);
   TILE_LYR=L.tileLayer(TILES[k],{maxZoom:19,maxNativeZoom:TILE_MAX_NATIVE_ZOOM[k],crossOrigin:true}).addTo(MAP);
 }
