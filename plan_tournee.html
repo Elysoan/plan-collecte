@@ -71,6 +71,8 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 
 /* ── PLANS ── */
 .plans-toolbar{display:flex;gap:6px;margin-bottom:10px;}
+#tournee-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+#tournee-tabs button{font-size:.78rem;}
 .btn-sm{padding:5px 12px;border:1px solid var(--border);border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text);display:flex;align-items:center;gap:4px;transition:all .15s;}
 .btn-sm:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);}
 .btn-sm.primary{background:var(--accent);color:white;border-color:var(--accent);}
@@ -338,19 +340,20 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <!-- ── Panel 1 : Import ── -->
     <div class="sb-panel active" id="panel-1">
       <div class="sec-title">Fichier shapefile</div>
-      <p class="hint">Glissez votre ZIP contenant le <strong>.shp</strong> et le <strong>.dbf</strong>.</p>
+      <p class="hint">Glissez un ou plusieurs ZIP, chacun contenant le <strong>.shp</strong> et le <strong>.dbf</strong> d'une tournée. Tournée et commune sont détectées automatiquement pour chacun.</p>
       <div id="dz">
-        <input type="file" id="file-input" accept=".zip">
+        <input type="file" id="file-input" accept=".zip" multiple>
         <div class="dz-icon">📂</div>
-        <h4>Glisser le ZIP ici</h4>
-        <p>ou cliquer pour parcourir</p>
-        <button class="dz-btn" onclick="document.getElementById('file-input').click()">Choisir un fichier</button>
+        <h4>Glisser le(s) ZIP ici</h4>
+        <p>ou cliquer pour parcourir (sélection multiple possible)</p>
+        <button class="dz-btn" onclick="document.getElementById('file-input').click()">Choisir des fichiers</button>
       </div>
       <div id="info-box"></div>
     </div>
 
     <!-- ── Panel 2 : Plans ── -->
     <div class="sb-panel" id="panel-2">
+      <div id="tournee-tabs" style="display:none"></div>
       <div class="plans-toolbar">
         <button class="btn-sm primary" onclick="addPlan()">＋ Nouveau plan</button>
         <button class="btn-sm" onclick="autoSplit()" title="Découper automatiquement en parts égales">⚡ Auto</button>
@@ -502,6 +505,11 @@ const PAPREC_LOGO='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABD4AAAEsCAYAAAA
 // ÉTAT
 // ═══════════════════════════════════════════════════════
 let RECS=[], CIRCUIT='', PLANS=[], PCTR=0;
+// RECS/CIRCUIT/PLANS/PCTR représentent toujours la tournée EN COURS D'ÉDITION — toute
+// la logique de l'étape 2 (carte, lasso, drag-drop des plans, etc.) continue d'opérer
+// dessus sans changement. TOURNEES est le lot complet (une entrée par ZIP importé) ;
+// switchTournee() synchronise l'un avec l'autre au changement d'onglet.
+let TOURNEES=[], CUR_TOURNEE=0;
 let MAP, TILE_LYR;
 let SEG={};       // id → {lines, lblMk, arrMk, rec}
 let ALL_BND=[];
@@ -556,12 +564,13 @@ function scheduleSave(){
 }
 function saveSession(){
   if(!RECS.length||SAVE_BROKEN)return;
+  syncCurrentTournee();
   try{
     const fields={};
     for(const id of FIELD_IDS)fields[id]=document.getElementById(id)?.value||'';
     const data={
-      v:1, RECS, CIRCUIT, PCTR, CUR_STEP, OFFSET_PX, fields,
-      PLANS:PLANS.map(p=>({...p,segIds:[...p.segIds]})),
+      v:2, CUR_STEP, OFFSET_PX, fields, CUR_TOURNEE,
+      TOURNEES:TOURNEES.map(t=>({circuit:t.circuit,commune:t.commune,PCTR:t.PCTR,RECS:t.RECS,PLANS:t.PLANS.map(p=>({...p,segIds:[...p.segIds]}))})),
       opts:{
         tile:document.getElementById('opt-tile').value,
         offset:document.getElementById('opt-offset').value,
@@ -586,11 +595,9 @@ function startOver(){
 function restoreSession(){
   const data=window.__SAVED_SESSION;
   if(!data)return;
-  RECS=data.RECS||[];
-  CIRCUIT=data.CIRCUIT||'';
-  PCTR=data.PCTR||0;
+  TOURNEES=data.TOURNEES.map(t=>({...t,PLANS:(t.PLANS||[]).map(p=>({...p,segIds:new Set(p.segIds)}))}));
   OFFSET_PX=data.OFFSET_PX||6;
-  PLANS=(data.PLANS||[]).map(p=>({...p,segIds:new Set(p.segIds)}));
+  activateTournee(Math.min(data.CUR_TOURNEE||0,TOURNEES.length-1));
   for(const [id,val] of Object.entries(data.fields||{})){
     const el=document.getElementById(id);if(el)el.value=val;
   }
@@ -617,10 +624,15 @@ function discardSession(){
     const raw=localStorage.getItem(SESSION_KEY);
     if(!raw)return;
     const data=JSON.parse(raw);
-    if(!data?.RECS?.length)return;
+    // Format v1 (une seule tournée, sans TOURNEES) : abandonné avec l'ajout du multi-import,
+    // trop coûteux à migrer pour une session locale d'un seul utilisateur — ignoré proprement.
+    if(!data?.TOURNEES?.length)return;
     window.__SAVED_SESSION=data;
-    document.getElementById('restore-msg').textContent=
-      `Circuit "${data.CIRCUIT||'—'}" — ${data.RECS.length} tronçons, ${(data.PLANS||[]).length} plan(s).`;
+    const totalRecs=data.TOURNEES.reduce((s,t)=>s+(t.RECS?.length||0),0);
+    const totalPlans=data.TOURNEES.reduce((s,t)=>s+(t.PLANS?.length||0),0);
+    document.getElementById('restore-msg').textContent=data.TOURNEES.length>1
+      ?`${data.TOURNEES.length} tournées — ${totalRecs} tronçons, ${totalPlans} plan(s) au total.`
+      :`Circuit "${data.TOURNEES[0].circuit||'—'}" — ${totalRecs} tronçons, ${totalPlans} plan(s).`;
     document.getElementById('restore-overlay').classList.add('show');
   }catch(e){}
 })();
@@ -676,29 +688,77 @@ function nextStep(){
 const dz=document.getElementById('dz');
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
 dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])load(e.dataTransfer.files[0]);});
-document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files[0])load(e.target.files[0]);});
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files.length)loadFiles([...e.dataTransfer.files]);});
+document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files.length)loadFiles([...e.target.files]);e.target.value='';});
 
-async function load(file){
-  try{
-    const zip=await JSZip.loadAsync(file);
-    let shpE=null,dbfE=null;
-    zip.forEach((p,e)=>{const pl=p.toLowerCase();if(pl.endsWith('.shp'))shpE=e;if(pl.endsWith('.dbf'))dbfE=e;});
-    if(!shpE||!dbfE){alert('ZIP doit contenir un .shp et un .dbf');return;}
-    const [shpBuf,dbfBuf]=await Promise.all([shpE.async('arraybuffer'),dbfE.async('arraybuffer')]);
-    const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
-    RECS=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
-    CIRCUIT=RECS[0]?.nomcircuit||'Circuit';
-    document.getElementById('f-tournee').value=CIRCUIT;
-    document.getElementById('f-commune').value=guessCommune(RECS);
-    showInfo(RECS);
-    buildLayers(RECS);
-    PLANS=[];PCTR=0;
-    // Découpage automatique par défaut : des plans prêts à l'emploi dès l'import
+// Sync la tournée EN COURS D'ÉDITION (globales RECS/PLANS/CIRCUIT) vers son entrée
+// dans TOURNEES — à appeler avant tout changement d'onglet ou toute lecture du lot complet.
+function syncCurrentTournee(){
+  const t=TOURNEES[CUR_TOURNEE];
+  if(!t)return;
+  t.RECS=RECS;t.PLANS=PLANS;t.PCTR=PCTR;
+  t.circuit=document.getElementById('f-tournee').value||CIRCUIT;
+  t.commune=document.getElementById('f-commune').value||t.commune;
+}
+// Bascule les globales sur la tournée idx (sans persister l'ancienne — appelant responsable)
+function activateTournee(idx){
+  CUR_TOURNEE=idx;
+  const t=TOURNEES[idx];
+  RECS=t.RECS;PLANS=t.PLANS;PCTR=t.PCTR;CIRCUIT=t.circuit;
+  document.getElementById('f-tournee').value=t.circuit;
+  document.getElementById('f-commune').value=t.commune;
+}
+function switchTournee(idx){
+  if(idx===CUR_TOURNEE||!TOURNEES[idx])return;
+  deactivatePlan(); // ACTIVE_PLAN référence un plan de la tournée qu'on quitte
+  syncCurrentTournee();
+  activateTournee(idx);
+  showInfo(RECS);
+  buildLayers(RECS);
+  renderPlans();refreshColors();
+  scheduleSave();
+}
+function renderTourneeTabs(){
+  const el=document.getElementById('tournee-tabs');
+  if(!el)return;
+  if(TOURNEES.length<=1){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='flex';
+  el.innerHTML=TOURNEES.map((t,i)=>{
+    const plans=i===CUR_TOURNEE?PLANS:t.PLANS;
+    const n=plans.filter(p=>p.segIds.size>0).length;
+    return `<button class="btn-sm${i===CUR_TOURNEE?' primary':''}" onclick="switchTournee(${i})" title="${t.commune||''}">${t.circuit||'Tournée '+(i+1)} · ${n}</button>`;
+  }).join('');
+}
+
+async function loadFiles(files){
+  const startIdx=TOURNEES.length;
+  for(const file of files){
+    try{
+      const zip=await JSZip.loadAsync(file);
+      let shpE=null,dbfE=null;
+      zip.forEach((p,e)=>{const pl=p.toLowerCase();if(pl.endsWith('.shp'))shpE=e;if(pl.endsWith('.dbf'))dbfE=e;});
+      if(!shpE||!dbfE){alert(`${file.name} : le ZIP doit contenir un .shp et un .dbf — ignoré.`);continue;}
+      const [shpBuf,dbfBuf]=await Promise.all([shpE.async('arraybuffer'),dbfE.async('arraybuffer')]);
+      const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
+      const recs=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
+      if(!recs.length){alert(`${file.name} : aucun tronçon exploitable — ignoré.`);continue;}
+      TOURNEES.push({circuit:recs[0]?.nomcircuit||file.name.replace(/\.zip$/i,''),commune:guessCommune(recs),RECS:recs,PLANS:[],PCTR:0});
+    }catch(e){alert(`${file.name} : erreur — ${e.message}`);console.error(e);}
+  }
+  if(TOURNEES.length===startIdx)return; // rien d'importable dans cette sélection
+
+  // Découpage automatique par défaut pour chaque tournée nouvellement importée
+  for(let i=startIdx;i<TOURNEES.length;i++){
+    activateTournee(i);
     autoSplit();
-    goStep(2);
-    document.getElementById('hdr-reset-btn').style.display='inline-block';
-  }catch(e){alert('Erreur: '+e.message);console.error(e);}
+    syncCurrentTournee();
+  }
+  activateTournee(startIdx);
+  showInfo(RECS);
+  buildLayers(RECS);
+  renderPlans();refreshColors();
+  goStep(2);
+  document.getElementById('hdr-reset-btn').style.display='inline-block';
 }
 
 function guessCommune(recs){
@@ -1033,6 +1093,7 @@ function updateBanner(){
 // RENDU LISTE DES PLANS
 // ═══════════════════════════════════════════════════════
 function renderPlans(){
+  renderTourneeTabs();
   const list=document.getElementById('plans-list');
   list.innerHTML='';
   if(!PLANS.length){
@@ -1317,7 +1378,18 @@ function refreshColors(){
 function updatePrintSummary(){
   const el=document.getElementById('print-summary');
   if(!el)return;
+  syncCurrentTournee(); // reflète les derniers ajustements de la tournée en cours dans TOURNEES
   const active=PLANS.filter(p=>p.segIds.size>0);
+  if(TOURNEES.length>1){
+    const rows=TOURNEES.map(t=>({t,n:t.PLANS.filter(p=>p.segIds.size>0).length}));
+    const total=rows.reduce((s,r)=>s+r.n,0);
+    if(!total){el.textContent='Aucun plan avec des tronçons pour le moment.';document.getElementById('print-thumbs').innerHTML='';return;}
+    const lines=rows.map(r=>`<div>${r.t.circuit||'Tournée'} — ${r.t.commune||'?'} : <strong>${r.n}</strong> plan${r.n>1?'s':''}</div>`).join('');
+    el.innerHTML=`🖨 <strong>${total} plan${total>1?'s':''}</strong> au total sur <strong>${TOURNEES.length} tournées</strong> :${lines}`;
+    if(active.length)renderThumbnails(active);
+    else document.getElementById('print-thumbs').innerHTML='';
+    return;
+  }
   if(!active.length){el.textContent='Aucun plan avec des tronçons pour le moment.';document.getElementById('print-thumbs').innerHTML='';return;}
   const land=active.filter(p=>planOrientation(p)==='landscape').length;
   const port=active.length-land;
@@ -1405,8 +1477,16 @@ function preloadImage(src){
 }
 
 async function doPrint(){
-  const active=PLANS.filter(p=>p.segIds.size>0);
-  if(!active.length){alert('Aucun tronçon dans les plans.');return;}
+  syncCurrentTournee(); // inclut les derniers ajustements de la tournée en cours dans le lot
+  // Génération à plat sur TOUT le lot de tournées, avec une numérotation de page propre
+  // à chaque tournée (des équipes différentes reçoivent des jeux de pages différents,
+  // une numérotation continue sur tout le lot n'aurait pas de sens pour elles).
+  const jobs=[];
+  for(const t of TOURNEES){
+    const activePlans=t.PLANS.filter(p=>p.segIds.size>0);
+    activePlans.forEach((plan,idx)=>jobs.push({tournee:t,plan,pageNum:idx+1,pageTotal:activePlans.length}));
+  }
+  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
   document.getElementById('gen-overlay').classList.add('show');
   document.getElementById('gen-msg').textContent='Génération des pages…';
   document.getElementById('gen-prog').style.width='20%';
@@ -1423,16 +1503,19 @@ async function doPrint(){
   const showLabels=document.getElementById('opt-labels').checked;
   const showArrows=document.getElementById('opt-arrows').checked;
 
-  for(let i=0;i<active.length;i++){
-    const plan=active[i];
-    const pct=20+Math.round(i/active.length*70);
+  for(let i=0;i<jobs.length;i++){
+    const {tournee,plan,pageNum,pageTotal}=jobs[i];
+    const tRecs=tournee.RECS;
+    const tCircuit=tournee.circuit||g('f-tournee')||CIRCUIT;
+    const tCommune=tournee.commune||g('f-commune');
+    const pct=20+Math.round(i/jobs.length*70);
     document.getElementById('gen-prog').style.width=pct+'%';
-    document.getElementById('gen-msg').textContent=`Page ${i+1}/${active.length}…`;
+    document.getElementById('gen-msg').textContent=`Page ${i+1}/${jobs.length}…`;
 
     const orient=planOrientation(plan);
 
     // Collect recs du plan
-    const mapRecs=RECS.filter(r=>plan.segIds.has(r.idtroncon));
+    const mapRecs=tRecs.filter(r=>plan.segIds.has(r.idtroncon));
     const presentActs=[...new Set(mapRecs.map(r=>r.nomactiv))];
 
     // Légende HTML
@@ -1458,13 +1541,13 @@ async function doPrint(){
   <div class="pp-swatch" style="background:${plan.color}"></div>
   <div class="pp-titles">
     <div class="pp-plan-name">${plan.name}</div>
-    <div class="pp-sub">Plan de collecte — ${g('f-tournee')||CIRCUIT}</div>
+    <div class="pp-sub">Plan de collecte — ${tCircuit}</div>
   </div>
-  <div class="pp-pagenum">Page ${i+1}/${active.length}</div>
+  <div class="pp-pagenum">Page ${pageNum}/${pageTotal}</div>
 </div>
 <div class="pp-map">
   <div id="pmap-${i}" class="pp-leaflet"></div>
-  ${g('f-commune')?`<div class="pp-watermark"><span>${g('f-commune')}</span></div>`:''}
+  ${tCommune?`<div class="pp-watermark"><span>${tCommune}</span></div>`:''}
 </div>
 <div class="pp-footer">
   <div class="pp-credits">
@@ -1475,8 +1558,8 @@ async function doPrint(){
   <div class="pp-info">
     <h4>Informations sur la tournée</h4>
     <div class="pp-info-grid">
-      <div>Tournée : <strong>${g('f-tournee')}</strong></div>
-      <div>Commune : <strong>${g('f-commune')}</strong></div>
+      <div>Tournée : <strong>${tCircuit}</strong></div>
+      <div>Commune : <strong>${tCommune}</strong></div>
       <div>Période : <strong>${g('f-periode')}</strong></div>
       <div>Fréquence : <strong>${g('f-freq')}</strong></div>
       <div>Saison : <strong>${g('f-saison')}</strong></div>
@@ -1552,14 +1635,14 @@ async function doPrint(){
     }
 
     // Hors-plan en gris
-    for(const r of RECS.filter(r=>!plan.segIds.has(r.idtroncon))){
+    for(const r of tRecs.filter(r=>!plan.segIds.has(r.idtroncon))){
       const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
       L.polyline(r.points,{color:'#bbb',weight:cfg.dash?1:1.5,dashArray:cfg.dash?'5 4':null,opacity:.2,interactive:false}).addTo(pmap);
     }
 
     // Point départ
     const firstId=[...plan.segIds].sort((a,b)=>parseInt(a)-parseInt(b))[0];
-    const fr=RECS.find(r=>r.idtroncon===firstId);
+    const fr=tRecs.find(r=>r.idtroncon===firstId);
     if(fr)L.marker(fr.points[0],{icon:L.divIcon({html:`<div style="width:18px;height:18px;background:#2E7D32;border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white">P</div>`,className:'',iconAnchor:[9,9]})}).addTo(pmap);
 
     // Boussole simple
