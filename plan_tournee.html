@@ -232,7 +232,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .pp-footer{flex-shrink:0;border-top:3px solid #0078be;display:grid;
   grid-template-columns:1.8fr 2.6fr 1.8fr 2fr;grid-template-areas:"credits info legend logos";
   column-gap:10px;padding:3mm 10mm;font-size:8pt;min-height:42mm;}
-.print-page.orient-portrait .pp-footer{grid-template-columns:1fr 1fr;grid-template-areas:"info logos" "credits legend";row-gap:6px;column-gap:14px;}
+.print-page.orient-portrait .pp-footer{grid-template-columns:1fr 1fr;grid-template-areas:"credits info" "legend logos";row-gap:10px;column-gap:14px;min-height:58mm;}
 
 .pp-credits{grid-area:credits;padding-right:8px;border-right:1px solid #ddd;font-size:6.6pt;color:#555;line-height:1.4;}
 .pp-credits h4{font-weight:700;color:#005a9e;margin-bottom:4px;font-size:7.5pt;text-transform:uppercase;letter-spacing:.03em;}
@@ -247,9 +247,13 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 /* background-image plutôt que <img> : un <img> ne suit pas la rotation d'un ancêtre
    pivoté (transform:rotate) lors de l'export PDF réel de Chrome — bug constaté et
    contourné, alors qu'un fond CSS se comporte correctement dans le même contexte. */
-.pp-logos .pp-logo-paprec{width:100%;height:18mm;background-size:contain;background-repeat:no-repeat;background-position:center;}
-.pp-logos .pp-logo-collectivite{width:100%;height:16mm;background-size:contain;background-repeat:no-repeat;background-position:center;border-top:1px solid #e2e2e2;padding-top:8px;}
-.print-page.orient-portrait .pp-credits,.print-page.orient-portrait .pp-legend{border-right:none;}
+.pp-logos .pp-logo-paprec{width:100%;height:14mm;background-size:contain;background-repeat:no-repeat;background-position:center;}
+.pp-logos .pp-logo-collectivite{width:100%;height:20mm;background-size:contain;background-repeat:no-repeat;background-position:center;border-top:1px solid #e2e2e2;padding-top:8px;}
+/* En portrait, la grille passe de "1 ligne / 4 colonnes" à "2 lignes / 2 colonnes" :
+   légende et logos se retrouvent l'un sous l'autre (au lieu de côte à côte), il leur
+   faut donc une séparation horizontale (border-top) en plus de la verticale existante. */
+.print-page.orient-portrait .pp-legend,.print-page.orient-portrait .pp-logos{border-top:1px solid #ddd;padding-top:10px;}
+.print-page.orient-portrait .pp-info{border-right:none;}
 
 .pp-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:450;overflow:hidden;}
 .pp-watermark span{font-size:46pt;font-weight:800;color:rgba(0,90,158,.09);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;transform:rotate(-22deg);}
@@ -1359,7 +1363,7 @@ function waitTilesLoaded(tileLayer){
     let done=false;
     const finish=()=>{if(done)return;done=true;resolve();};
     tileLayer.once('load',finish);
-    setTimeout(finish,6000); // garde-fou si une tuile ne répond jamais (certains fonds sont plus lents)
+    setTimeout(finish,12000); // garde-fou si une tuile ne répond jamais (certains fonds sont plus lents, ex. IGN sous charge)
   });
 }
 
@@ -1480,6 +1484,12 @@ async function doPrint(){
     if(!mapDiv)continue;
     const pmap=L.map(mapDiv,{zoomControl:false,attributionControl:true,preferCanvas:true,fadeAnimation:false,zoomAnimation:false});
     const pTiles=L.tileLayer(tileUrl,{maxZoom:19,maxNativeZoom:TILE_MAX_NATIVE_ZOOM[tileKey]}).addTo(pmap);
+    // Le listener doit être posé AVANT fitBounds : c'est fitBounds qui déclenche le
+    // chargement des tuiles du bon emplacement. Si on attend d'avoir fini de tracer
+    // tronçons/marqueurs pour poser le listener (comme avant), et que ces tuiles se
+    // chargent vite (cache), l'évènement 'load' peut se déclencher et être manqué
+    // avant même qu'on l'écoute — d'où un trou blanc sporadique, un plan sur plusieurs.
+    const tilesReady=waitTilesLoaded(pTiles);
 
     // Centrer la carte AVANT de tracer les tronçons : l'offset latéral a besoin d'une
     // projection déjà valide (zoom/centre définis) pour convertir lat/lon ↔ pixels.
@@ -1535,7 +1545,7 @@ async function doPrint(){
     new L.Control.Compass({position:'bottomleft'}).addTo(pmap);
     L.control.scale({metric:true,imperial:false,position:'bottomright'}).addTo(pmap);
 
-    await waitTilesLoaded(pTiles);
+    await tilesReady;
   }
 
   document.getElementById('gen-prog').style.width='95%';
