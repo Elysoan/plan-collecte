@@ -1360,12 +1360,26 @@ function waitTilesLoaded(tileLayer){
   });
 }
 
+// Force le décodage complet d'une image (base64 y compris) avant de l'utiliser en fond
+// de page : sans ça, l'impression peut se déclencher avant que le logo soit prêt à être
+// peint, et il apparaît alors manquant sur certains navigateurs/pilotes d'impression.
+function preloadImage(src){
+  return new Promise(resolve=>{
+    if(!src)return resolve();
+    const img=new Image();
+    img.onload=()=>img.decode?img.decode().then(resolve).catch(resolve):resolve();
+    img.onerror=resolve;
+    img.src=src;
+  });
+}
+
 async function doPrint(){
   const active=PLANS.filter(p=>p.segIds.size>0);
   if(!active.length){alert('Aucun tronçon dans les plans.');return;}
   document.getElementById('gen-overlay').classList.add('show');
   document.getElementById('gen-msg').textContent='Génération des pages…';
   document.getElementById('gen-prog').style.width='20%';
+  await Promise.all([preloadImage(PAPREC_LOGO),preloadImage(LOGO_DATA)]);
   await sleep(50);
 
   const g=id=>document.getElementById(id)?.value||'';
