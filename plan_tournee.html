@@ -573,7 +573,7 @@ function saveSession(){
     for(const id of FIELD_IDS)fields[id]=document.getElementById(id)?.value||'';
     const data={
       v:2, CUR_STEP, OFFSET_PX, fields, CUR_TOURNEE,
-      TOURNEES:TOURNEES.map(t=>({circuit:t.circuit,commune:t.commune,PCTR:t.PCTR,RECS:t.RECS,PLANS:t.PLANS.map(p=>({...p,segIds:[...p.segIds]}))})),
+      TOURNEES:TOURNEES.map(t=>({circuit:t.circuit,shortName:t.shortName,commune:t.commune,PCTR:t.PCTR,RECS:t.RECS,PLANS:t.PLANS.map(p=>({...p,segIds:[...p.segIds]}))})),
       opts:{
         tile:document.getElementById('opt-tile').value,
         offset:document.getElementById('opt-offset').value,
@@ -751,13 +751,25 @@ async function loadFiles(files){
       for(const shpPath of shpPaths){
         const base=shpPath.slice(0,-4);
         const shpE=byLowerPath[shpPath], dbfE=byLowerPath[base+'.dbf'];
-        const label=shpPath.split('/').pop();
+        // shpE.name (pas shpPath, qui est mis en minuscule pour la recherche) : préserve la
+        // casse d'origine du fichier, ex. "OBB1111CS" plutôt que "obb1111cs".
+        const label=shpE.name.split('/').pop();
         if(!dbfE){alert(`${file.name} : .dbf manquant pour ${label} — circuit ignoré.`);continue;}
         const [shpBuf,dbfBuf]=await Promise.all([shpE.async('arraybuffer'),dbfE.async('arraybuffer')]);
         const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
         const recs=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
         if(!recs.length){alert(`${file.name} : ${label} — aucun tronçon exploitable, ignoré.`);continue;}
-        TOURNEES.push({circuit:recs[0]?.nomcircuit||label.replace(/\.shp$/i,''),commune:guessCommune(recs),RECS:recs,PLANS:[],PCTR:0});
+        // "circuit" (long) sert à l'affichage sur les plans (ex. "Ecommoy Campagne 70% CS",
+        // issu du champ nomcircuit) ; "shortName" (court) sert aux noms de fichiers PDF —
+        // dérivé du nom du .shp lui-même (ex. "circuit_OBB1111CS" → "OBB1111CS"), qui suit
+        // en général une convention de code court même quand nomcircuit est une longue
+        // description.
+        const shpBase=label.replace(/\.shp$/i,'');
+        TOURNEES.push({
+          circuit:recs[0]?.nomcircuit||shpBase,
+          shortName:shpBase.replace(/^circuit[_-]?/i,'')||shpBase,
+          commune:guessCommune(recs),RECS:recs,PLANS:[],PCTR:0,
+        });
       }
     }catch(e){alert(`${file.name} : erreur — ${e.message}`);console.error(e);}
   }
@@ -1757,7 +1769,7 @@ async function doPrintSeparate(){
       }
       // Le nom suggéré par la boîte "Enregistrer en PDF" du navigateur reprend le titre
       // de la page : un nom de fichier par tournée, plutôt qu'un titre générique.
-      document.title=tournee.circuit.replace(/[\\/:*?"<>|]/g,'-');
+      document.title=(tournee.shortName||tournee.circuit).replace(/[\\/:*?"<>|]/g,'-');
       document.getElementById('gen-msg').textContent=`Tournée ${g+1}/${groups.length} — enregistrez le PDF puis fermez la boîte pour continuer…`;
       overlay.classList.remove('show');
       const afterPrint=waitAfterPrint();
