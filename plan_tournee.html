@@ -375,9 +375,14 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <!-- ── Panel 3 : Infos & Export ── -->
     <div class="sb-panel" id="panel-3">
       <div class="sec-title" style="margin-bottom:10px;">Informations tournée</div>
-      <div class="fg" style="margin-bottom:14px;">
+      <!-- Plusieurs tournées : chacune a son propre nom/commune (auto-détectés à l'import,
+           mais modifiables ici même, tournée par tournée, sans changer d'onglet). -->
+      <div id="tournee-info-list" style="display:none;margin-bottom:14px;"></div>
+      <div class="fg" id="tournee-info-single" style="margin-bottom:14px;">
         <div class="f"><label>Tournée</label><input id="f-tournee"></div>
         <div class="f"><label>Commune</label><input id="f-commune"></div>
+      </div>
+      <div class="fg" style="margin-bottom:14px;">
         <div class="f"><label>Période</label><input id="f-periode" placeholder="Matin"></div>
         <div class="f"><label>Jour</label><input id="f-jour" placeholder="Lundi"></div>
         <div class="f"><label>Fréquence</label><input id="f-freq" placeholder="C0.5"></div>
@@ -1421,10 +1426,42 @@ function refreshColors(){
 // ═══════════════════════════════════════════════════════
 // RÉCAPITULATIF AVANT EXPORT
 // ═══════════════════════════════════════════════════════
+// Un champ Tournée/Commune par tournée du lot, éditable directement, sans changer
+// d'onglet — sinon seule la tournée actuellement active (activateTournee) est éditable
+// via les champs f-tournee/f-commune classiques.
+function renderTourneeInfoList(){
+  const listEl=document.getElementById('tournee-info-list');
+  const singleEl=document.getElementById('tournee-info-single');
+  if(!listEl||!singleEl)return;
+  if(TOURNEES.length<=1){
+    listEl.style.display='none';listEl.innerHTML='';
+    singleEl.style.display='grid';
+    return;
+  }
+  singleEl.style.display='none';
+  listEl.style.display='block';
+  const esc=s=>(s||'').replace(/"/g,'&quot;');
+  listEl.innerHTML=TOURNEES.map((t,i)=>`
+<div class="fg" style="padding-bottom:8px;margin-bottom:8px;${i<TOURNEES.length-1?'border-bottom:1px solid var(--border);':''}">
+  <div class="f"><label>Tournée ${i+1}</label><input value="${esc(t.circuit)}" oninput="setTourneeField(${i},'circuit',this.value)"></div>
+  <div class="f"><label>Commune</label><input value="${esc(t.commune)}" oninput="setTourneeField(${i},'commune',this.value)"></div>
+</div>`).join('');
+}
+function setTourneeField(i,field,val){
+  const t=TOURNEES[i];if(!t)return;
+  t[field]=val;
+  if(i===CUR_TOURNEE){
+    if(field==='circuit'){CIRCUIT=val;document.getElementById('f-tournee').value=val;}
+    if(field==='commune')document.getElementById('f-commune').value=val;
+  }
+  scheduleSave();
+}
+
 function updatePrintSummary(){
   const el=document.getElementById('print-summary');
   if(!el)return;
   syncCurrentTournee(); // reflète les derniers ajustements de la tournée en cours dans TOURNEES
+  renderTourneeInfoList();
   const active=PLANS.filter(p=>p.segIds.size>0);
   if(TOURNEES.length>1){
     const rows=TOURNEES.map(t=>({t,n:t.PLANS.filter(p=>p.segIds.size>0).length}));
