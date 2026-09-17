@@ -424,6 +424,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <button class="btn-outline" id="btn-print" style="display:none" onclick="doPrint()">
         🖨 Imprimer / Enregistrer en PDF
       </button>
+      <button class="btn-outline" id="btn-print-separate" style="display:none" onclick="doPrintSeparate()" title="Ouvre la boîte d'impression une fois par plan, pour enregistrer chacun dans son propre fichier PDF">
+        📑 Un PDF par plan
+      </button>
     </div>
   </div>
 
@@ -668,8 +671,9 @@ function goStep(n){
     document.querySelectorAll('.sb-panel').forEach((p,i)=>p.classList.toggle('active',i+1===n));
     const nextBtn=document.getElementById('btn-next');
     const printBtn=document.getElementById('btn-print');
-    if(n===3){nextBtn.style.display='none';printBtn.style.display='block';updatePrintSummary();}
-    else{nextBtn.style.display='block';printBtn.style.display='none';}
+    const printSepBtn=document.getElementById('btn-print-separate');
+    if(n===3){nextBtn.style.display='none';printBtn.style.display='block';printSepBtn.style.display='block';updatePrintSummary();}
+    else{nextBtn.style.display='block';printBtn.style.display='none';printSepBtn.style.display='none';}
     document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
     document.getElementById('seg-search').style.display=n===2?'flex':'none';
     if(n!==2)deactivatePlan();
@@ -1498,42 +1502,47 @@ function preloadImage(src){
   });
 }
 
-async function doPrint(){
+// Liste à plat de tous les plans à générer (toutes tournées confondues), avec une
+// numérotation de page propre à CHAQUE tournée (des équipes différentes reçoivent des
+// jeux de pages différents, une numérotation continue sur tout le lot n'aurait pas de sens).
+function buildPrintJobs(){
   syncCurrentTournee(); // inclut les derniers ajustements de la tournée en cours dans le lot
-  // Génération à plat sur TOUT le lot de tournées, avec une numérotation de page propre
-  // à chaque tournée (des équipes différentes reçoivent des jeux de pages différents,
-  // une numérotation continue sur tout le lot n'aurait pas de sens pour elles).
   const jobs=[];
   for(const t of TOURNEES){
     const activePlans=t.PLANS.filter(p=>p.segIds.size>0);
     activePlans.forEach((plan,idx)=>jobs.push({tournee:t,plan,pageNum:idx+1,pageTotal:activePlans.length}));
   }
-  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
-  document.getElementById('gen-overlay').classList.add('show');
-  document.getElementById('gen-msg').textContent='Génération des pages…';
-  document.getElementById('gen-prog').style.width='20%';
+  return jobs;
+}
+
+// Réunit tout ce qui est partagé entre les pages d'une même génération (options carte,
+// logos préchargés, etc.) — calculé une fois, réutilisé pour chaque page.
+async function preparePrintContext(){
   await Promise.all([preloadImage(PAPREC_LOGO),preloadImage(LOGO_DATA)]);
   await sleep(50);
-
-  const g=id=>document.getElementById(id)?.value||'';
-  const today=new Date().toLocaleDateString('fr-FR');
-  const container=document.getElementById('print-pages');
-  container.innerHTML='';
-
   const tileKey=document.getElementById('opt-tile').value;
-  const tileUrl=TILES[tileKey];
-  const showLabels=document.getElementById('opt-labels').checked;
-  const showArrows=document.getElementById('opt-arrows').checked;
+  return{
+    g:id=>document.getElementById(id)?.value||'',
+    today:new Date().toLocaleDateString('fr-FR'),
+    tileKey,
+    tileUrl:TILES[tileKey],
+    showLabels:document.getElementById('opt-labels').checked,
+    showArrows:document.getElementById('opt-arrows').checked,
+  };
+}
 
-  for(let i=0;i<jobs.length;i++){
-    const {tournee,plan,pageNum,pageTotal}=jobs[i];
-    const tRecs=tournee.RECS;
-    const tCircuit=tournee.circuit||g('f-tournee')||CIRCUIT;
-    const tCommune=tournee.commune||g('f-commune');
-    const pct=20+Math.round(i/jobs.length*70);
-    document.getElementById('gen-prog').style.width=pct+'%';
-    document.getElementById('gen-msg').textContent=`Page ${i+1}/${jobs.length}…`;
+// Construit UNE page dans #print-pages (repère DOM domIdx, pour l'id de la carte Leaflet)
+// et attend que ses tuiles soient chargées avant de rendre la main.
+async function buildPrintPage(job,domIdx,ctx){
+  const container=document.getElementById('print-pages');
+  const {tournee,plan,pageNum,pageTotal}=job;
+  const {g,today,tileKey,tileUrl,showLabels,showArrows}=ctx;
+  const tRecs=tournee.RECS;
+  const tCircuit=tournee.circuit||g('f-tournee')||CIRCUIT;
+  const tCommune=tournee.commune||g('f-commune');
+  const i=domIdx;
 
+  {
     const orient=planOrientation(plan);
 
     // Collect recs du plan
@@ -1610,7 +1619,7 @@ async function doPrint(){
     // Créer carte Leaflet dans la page
     await sleep(30);
     const mapDiv=document.getElementById('pmap-'+i);
-    if(!mapDiv)continue;
+    if(!mapDiv)return;
     const pmap=L.map(mapDiv,{zoomControl:false,attributionControl:true,preferCanvas:true,fadeAnimation:false,zoomAnimation:false});
     const pTiles=L.tileLayer(tileUrl,{maxZoom:19,maxNativeZoom:TILE_MAX_NATIVE_ZOOM[tileKey]}).addTo(pmap);
     // Le listener doit être posé AVANT fitBounds : c'est fitBounds qui déclenche le
@@ -1676,18 +1685,84 @@ async function doPrint(){
 
     await tilesReady;
   }
+}
+
+// Résout quand la boîte d'impression se ferme (imprimé, enregistré ou annulé) — c'est ce
+// qui permet d'enchaîner les plans un par un dans doPrintSeparate() sans minuter à l'aveugle.
+function waitAfterPrint(){
+  return new Promise(resolve=>{
+    const h=()=>{window.removeEventListener('afterprint',h);resolve();};
+    window.addEventListener('afterprint',h);
+  });
+}
+
+async function doPrint(){
+  const jobs=buildPrintJobs();
+  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
+  document.getElementById('gen-overlay').classList.add('show');
+  document.getElementById('gen-msg').textContent='Génération des pages…';
+  document.getElementById('gen-prog').style.width='20%';
+  const ctx=await preparePrintContext();
+  const container=document.getElementById('print-pages');
+  container.innerHTML='';
+
+  for(let i=0;i<jobs.length;i++){
+    document.getElementById('gen-prog').style.width=(20+Math.round(i/jobs.length*70))+'%';
+    document.getElementById('gen-msg').textContent=`Page ${i+1}/${jobs.length}…`;
+    await buildPrintPage(jobs[i],i,ctx);
+  }
 
   document.getElementById('gen-prog').style.width='95%';
   document.getElementById('gen-msg').textContent='Prêt — la boîte d\'impression va s\'ouvrir…';
   await sleep(200);
-
   document.getElementById('gen-overlay').classList.remove('show');
 
-  // Lancer l'impression
   window.print();
-
-  // Nettoyer après impression
   setTimeout(()=>{container.innerHTML='';},2000);
+}
+
+// Un fichier PDF par plan : impossible de scinder un unique export PDF en plusieurs
+// fichiers depuis le navigateur, donc on ouvre la boîte d'impression une fois PAR PLAN —
+// à chaque fermeture (impression, enregistrement ou annulation), on enchaîne sur le
+// suivant. Fastidieux si le lot est gros, mais c'est la seule voie sans réintroduire
+// jsPDF/html2canvas (abandonné plus tôt à cause du canvas "taint" par les tuiles de fond).
+async function doPrintSeparate(){
+  const jobs=buildPrintJobs();
+  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
+  const originalTitle=document.title;
+  const container=document.getElementById('print-pages');
+  const overlay=document.getElementById('gen-overlay');
+  const btnPrint=document.getElementById('btn-print'), btnSep=document.getElementById('btn-print-separate');
+  btnPrint.disabled=true;btnSep.disabled=true;
+
+  try{
+    overlay.classList.add('show');
+    document.getElementById('gen-msg').textContent='Préparation…';
+    document.getElementById('gen-prog').style.width='10%';
+    const ctx=await preparePrintContext();
+
+    for(let i=0;i<jobs.length;i++){
+      const {tournee,plan}=jobs[i];
+      overlay.classList.add('show');
+      document.getElementById('gen-msg').textContent=`Plan ${i+1}/${jobs.length} — ${tournee.circuit} · ${plan.name}…`;
+      document.getElementById('gen-prog').style.width=(10+Math.round(i/jobs.length*80))+'%';
+      container.innerHTML='';
+      await buildPrintPage(jobs[i],0,ctx);
+      // Le nom suggéré par la boîte "Enregistrer en PDF" du navigateur reprend le titre
+      // de la page : un nom de fichier par plan, plutôt qu'un titre générique.
+      document.title=`${tournee.circuit} - ${plan.name}`.replace(/[\\/:*?"<>|]/g,'-');
+      document.getElementById('gen-msg').textContent=`Plan ${i+1}/${jobs.length} — enregistrez le PDF puis fermez la boîte pour continuer…`;
+      overlay.classList.remove('show');
+      const afterPrint=waitAfterPrint();
+      window.print();
+      await afterPrint;
+    }
+  }finally{
+    document.title=originalTitle;
+    container.innerHTML='';
+    overlay.classList.remove('show');
+    btnPrint.disabled=false;btnSep.disabled=false;
+  }
 }
 
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
