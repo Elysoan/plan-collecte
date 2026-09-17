@@ -129,12 +129,17 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .seg-pill:hover{opacity:.75;}
 
 /* ── MINIATURES AVANT EXPORT ── */
-.thumbs-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
-.thumb-card{cursor:pointer;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px;transition:border-color .15s;}
+.thumb-group{margin-top:10px;}
+.thumb-group-title{font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.02em;}
+.thumb-group-cards{display:flex;flex-wrap:wrap;gap:8px;}
+.thumb-card{text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px;transition:border-color .15s;}
+.thumb-card svg{cursor:pointer;}
 .thumb-card:hover{border-color:var(--accent);}
-.thumb-label{font-size:.66rem;color:var(--text);margin-top:4px;display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+.thumb-label{font-size:.66rem;color:var(--text);margin-top:4px;display:flex;align-items:center;justify-content:center;gap:3px;max-width:150px;}
 .thumb-swatch{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
-.thumb-orient{color:var(--muted);}
+.thumb-orient{color:var(--muted);flex-shrink:0;}
+.thumb-name-inp{width:100px;font-size:.64rem;border:1px solid transparent;background:transparent;color:var(--text);border-radius:3px;padding:1px 2px;text-align:center;}
+.thumb-name-inp:hover,.thumb-name-inp:focus{border-color:var(--border);background:var(--surface);outline:none;}
 
 /* ── OPTIONS ── */
 .opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.82rem;}
@@ -513,6 +518,9 @@ let RECS=[], CIRCUIT='', PLANS=[], PCTR=0;
 // dessus sans changement. TOURNEES est le lot complet (une entrée par ZIP importé) ;
 // switchTournee() synchronise l'un avec l'autre au changement d'onglet.
 let TOURNEES=[], CUR_TOURNEE=0;
+// Nom court de la tournée en cours d'édition — utilisé comme préfixe par défaut des noms
+// de plan, pour qu'ils restent identifiables une fois plusieurs tournées mélangées.
+function curShortName(){return TOURNEES[CUR_TOURNEE]?.shortName||CIRCUIT||'Tournée';}
 let MAP, TILE_LYR;
 let SEG={};       // id → {lines, lblMk, arrMk, rec}
 let ALL_BND=[];
@@ -933,7 +941,7 @@ function addPlan(allTroncons=false){
     const ov=overviewSegIds();
     segIds=ov.segIds;rangeFrom=ov.first;rangeTo=ov.last;
   }
-  const plan={id,name:allTroncons?'Plan général':`Plan ${id}`,color,segIds,
+  const plan={id,name:`${curShortName()} - ${allTroncons?'Plan général':'Plan '+id}`,color,segIds,
     rangeFrom,rangeTo,mode:'range',orientation:'auto'};
   PLANS.push(plan);
   renderPlans();refreshColors();updatePrintSummary();
@@ -1007,7 +1015,7 @@ function autoSplit(){
     const first=parseInt(RECS[collecteIdx[ptr]].idtroncon),last=parseInt(RECS[lastRecIdx].idtroncon);
     const segIds=new Set();
     for(let k=collecteIdx[ptr];k<=lastRecIdx;k++)segIds.add(RECS[k].idtroncon);
-    const p=addPlanSilent(`Plan ${PLANS.length+1}`,segIds);
+    const p=addPlanSilent(`${curShortName()} - Plan ${PLANS.length+1}`,segIds);
     p.rangeFrom=first;p.rangeTo=last;
     sizes.push(endPtr-ptr);
     ptr=endPtr;
@@ -1027,7 +1035,7 @@ function autoSplit(){
   // Vue d'ensemble en tête de liste : tout le circuit (hlp de tête/queue exclus),
   // en plus des plans par zone — pour une page de contexte avant le détail.
   const ov=overviewSegIds();
-  PLANS.unshift({id:++PCTR,name:"Vue d'ensemble",color:'#2c3e50',segIds:ov.segIds,
+  PLANS.unshift({id:++PCTR,name:`${curShortName()} - Vue d'ensemble`,color:'#2c3e50',segIds:ov.segIds,
     rangeFrom:ov.first,rangeTo:ov.last,mode:'range',orientation:'auto'});
 
   renderPlans();refreshColors();updatePrintSummary();
@@ -1424,8 +1432,7 @@ function updatePrintSummary(){
     if(!total){el.textContent='Aucun plan avec des tronçons pour le moment.';document.getElementById('print-thumbs').innerHTML='';return;}
     const lines=rows.map(r=>`<div>${r.t.circuit||'Tournée'} — ${r.t.commune||'?'} : <strong>${r.n}</strong> plan${r.n>1?'s':''}</div>`).join('');
     el.innerHTML=`🖨 <strong>${total} plan${total>1?'s':''}</strong> au total sur <strong>${TOURNEES.length} tournées</strong> :${lines}`;
-    if(active.length)renderThumbnails(active);
-    else document.getElementById('print-thumbs').innerHTML='';
+    renderThumbnails();
     return;
   }
   if(!active.length){el.textContent='Aucun plan avec des tronçons pour le moment.';document.getElementById('print-thumbs').innerHTML='';return;}
@@ -1435,46 +1442,65 @@ function updatePrintSummary(){
   if(land)parts.push(`${land} en A3 paysage`);
   if(port)parts.push(`${port} en A3 portrait`);
   el.innerHTML=`🖨 <strong>${active.length} plan${active.length>1?'s':''}</strong> prêt${active.length>1?'s':''} à l'impression — ${parts.join(' · ')}.`;
-  renderThumbnails(active);
+  renderThumbnails();
 }
 
 // Aperçus miniatures (SVG léger, pas de carte Leaflet) de chaque plan avant export
-function renderThumbnails(active){
+// Regroupées par tournée (et pas juste la tournée active) : on veut pouvoir renommer
+// n'importe quel plan de n'importe quelle tournée du lot sans avoir à changer d'onglet.
+// La géométrie vient de t.RECS directement (pas de SEG, qui ne reflète que les couches
+// Leaflet de la tournée actuellement affichée sur la carte d'édition).
+function renderThumbnails(){
   const wrap=document.getElementById('print-thumbs');
   if(!wrap)return;
-  wrap.innerHTML=active.map(p=>{
-    const orient=planOrientation(p);
-    const w=orient==='landscape'?110:78, h=orient==='landscape'?78:110;
-    let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
-    const segs=[];
-    for(const id of p.segIds){
-      const s=SEG[id];if(!s)continue;
-      segs.push(s.rec);
-      for(const [la,lo] of s.rec.points){
+  syncCurrentTournee();
+  const groups=TOURNEES.map((t,tIdx)=>({t,tIdx,active:t.PLANS.filter(p=>p.segIds.size>0)})).filter(gr=>gr.active.length);
+  wrap.innerHTML=groups.map(({t,tIdx,active})=>{
+    const cards=active.map(p=>{
+      const orient=planOrientation(p);
+      const w=orient==='landscape'?110:78, h=orient==='landscape'?78:110;
+      const segs=t.RECS.filter(r=>p.segIds.has(r.idtroncon));
+      let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+      for(const r of segs)for(const [la,lo] of r.points){
         if(la<minLat)minLat=la;if(la>maxLat)maxLat=la;
         if(lo<minLon)minLon=lo;if(lo>maxLon)maxLon=lo;
       }
-    }
-    let lines='';
-    if(isFinite(minLat)){
-      const pad=5;
-      const spanLat=(maxLat-minLat)||0.0001, spanLon=(maxLon-minLon)||0.0001;
-      const scale=Math.min((w-pad*2)/spanLon,(h-pad*2)/spanLat);
-      const offX=(w-spanLon*scale)/2, offY=(h-spanLat*scale)/2;
-      const X=lo=>offX+(lo-minLon)*scale;
-      const Y=la=>h-(offY+(la-minLat)*scale);
-      for(const r of segs){
-        const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
-        const pts=r.points.map(([la,lo])=>`${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join(' ');
-        lines+=`<polyline points="${pts}" fill="none" stroke="${cfg.color}" stroke-width="${cfg.dash?1:1.6}" stroke-dasharray="${cfg.dash?'3 2':''}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      let lines='';
+      if(isFinite(minLat)){
+        const pad=5;
+        const spanLat=(maxLat-minLat)||0.0001, spanLon=(maxLon-minLon)||0.0001;
+        const scale=Math.min((w-pad*2)/spanLon,(h-pad*2)/spanLat);
+        const offX=(w-spanLon*scale)/2, offY=(h-spanLat*scale)/2;
+        const X=lo=>offX+(lo-minLon)*scale;
+        const Y=la=>h-(offY+(la-minLat)*scale);
+        for(const r of segs){
+          const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
+          const pts=r.points.map(([la,lo])=>`${X(lo).toFixed(1)},${Y(la).toFixed(1)}`).join(' ');
+          lines+=`<polyline points="${pts}" fill="none" stroke="${cfg.color}" stroke-width="${cfg.dash?1:1.6}" stroke-dasharray="${cfg.dash?'3 2':''}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        }
       }
-    }
-    return `
-<div class="thumb-card" onclick="goStep(2);zoomPlan(${p.id})" title="Voir ${p.name} sur la carte">
-  <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="background:#eef1f6;border-radius:4px;display:block">${lines}</svg>
-  <div class="thumb-label"><span class="thumb-swatch" style="background:${p.color}"></span>${p.name}<span class="thumb-orient">${orient==='landscape'?'(P)':'(V)'}</span></div>
+      return `
+<div class="thumb-card">
+  <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="background:#eef1f6;border-radius:4px;display:block" onclick="switchTournee(${tIdx});goStep(2);zoomPlan(${p.id})" title="Voir sur la carte">${lines}</svg>
+  <div class="thumb-label">
+    <span class="thumb-swatch" style="background:${p.color}"></span>
+    <input class="thumb-name-inp" value="${p.name.replace(/"/g,'&quot;')}" oninput="renamePlanAt(${tIdx},${p.id},this.value)" title="Renommer ce plan">
+    <span class="thumb-orient">${orient==='landscape'?'(P)':'(V)'}</span>
+  </div>
 </div>`;
+    }).join('');
+    const header=TOURNEES.length>1?`<div class="thumb-group-title">${t.circuit}${t.commune?' — '+t.commune:''}</div>`:'';
+    return `<div class="thumb-group">${header}<div class="thumb-group-cards">${cards}</div></div>`;
   }).join('');
+}
+// Renomme un plan par (index de tournée, id de plan) — l'id de plan seul ne suffit pas :
+// chaque tournée a son propre compteur, donc deux tournées peuvent avoir un plan id=1.
+function renamePlanAt(tIdx,planId,newName){
+  const t=TOURNEES[tIdx];if(!t)return;
+  const p=t.PLANS.find(pl=>pl.id===planId);if(!p)return;
+  p.name=newName;
+  if(tIdx===CUR_TOURNEE)renderPlans(); // reflète le nouveau nom dans la liste de l'étape 2
+  scheduleSave();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1708,9 +1734,18 @@ function waitAfterPrint(){
   });
 }
 
+// Nom suggéré par la boîte "Enregistrer en PDF" (reprend document.title) pour un lot :
+// le nom court de l'unique tournée s'il n'y en a qu'une, sinon tous les noms courts
+// concernés, réunis (l'utilisateur peut toujours modifier le nom proposé avant d'enregistrer).
+function printBatchTitle(){
+  const names=[...new Set(TOURNEES.map(t=>t.shortName||t.circuit).filter(Boolean))];
+  return (names.length?(names.length===1?names[0]:names.join('_')):'Plans de collecte').replace(/[\\/:*?"<>|]/g,'-');
+}
+
 async function doPrint(){
   const jobs=buildPrintJobs();
   if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
+  const originalTitle=document.title;
   document.getElementById('gen-overlay').classList.add('show');
   document.getElementById('gen-msg').textContent='Génération des pages…';
   document.getElementById('gen-prog').style.width='20%';
@@ -1729,8 +1764,9 @@ async function doPrint(){
   await sleep(200);
   document.getElementById('gen-overlay').classList.remove('show');
 
+  document.title=printBatchTitle();
   window.print();
-  setTimeout(()=>{container.innerHTML='';},2000);
+  setTimeout(()=>{container.innerHTML='';document.title=originalTitle;},2000);
 }
 
 // Un fichier PDF par CIRCUIT (tournée) : impossible de scinder un unique export PDF en
