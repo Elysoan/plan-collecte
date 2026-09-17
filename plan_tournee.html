@@ -207,6 +207,29 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 }
 
 /*
+  Feuille de route : contrairement aux plans cartographiques (Leaflet a besoin d'une
+  taille CSS connue en mm avant de calculer tuiles/zoom, d'où les pages hors-écran de
+  taille fixe), c'est du texte pur — on laisse le flux normal du document + la
+  pagination native du navigateur faire le travail, y compris à travers plusieurs
+  pages si un plan a beaucoup de tronçons (colonnes CSS qui débordent proprement d'une
+  page à l'autre à l'impression).
+*/
+#route-pages{display:none;}
+.rs-plan{width:420mm;margin:0 auto;font-family:'Segoe UI',system-ui,sans-serif;padding:10mm 12mm;box-sizing:border-box;}
+.rs-plan:not(:first-child){page-break-before:always;}
+.rs-header{background:linear-gradient(120deg,#005a9e,#0078be);color:white;display:flex;align-items:center;gap:12px;padding:5mm 8mm;border-radius:4px;margin-bottom:6mm;}
+.rs-header .rs-swatch{width:8mm;height:8mm;border-radius:3px;border:1.5px solid rgba(255,255,255,.7);flex-shrink:0;}
+.rs-header .rs-plan-name{font-size:13pt;font-weight:800;line-height:1.15;}
+.rs-header .rs-sub{font-size:8pt;opacity:.85;letter-spacing:.03em;text-transform:uppercase;}
+.rs-cols{columns:3;column-gap:8mm;}
+.rs-row{display:flex;align-items:center;gap:2mm;break-inside:avoid-column;margin-bottom:1.6mm;padding:1mm 0;border-bottom:1px solid #eee;font-size:8pt;}
+.rs-num{flex-shrink:0;min-width:7mm;height:5mm;border-radius:3px;color:white;font-weight:800;font-size:7.5pt;display:flex;align-items:center;justify-content:center;padding:0 1mm;}
+.rs-body{flex:1;min-width:0;}
+.rs-street{font-weight:600;color:#1c2333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rs-meta{color:#667085;font-size:7.2pt;display:flex;gap:4px;flex-wrap:wrap;}
+.rs-dir{color:#005a9e;font-weight:700;}
+
+/*
   Pages d'impression : construites hors-écran mais à leur taille physique réelle (mm)
   dès la génération (position:absolute, décalées hors du viewport). Leaflet calcule
   ainsi tuiles/zoom sur la bonne taille dès le départ — plus de recalcul ni de tuiles
@@ -441,6 +464,9 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <button class="btn-outline" id="btn-print-separate" style="display:none" onclick="doPrintSeparate()" title="Ouvre la boîte d'impression une fois par tournée (tous ses plans regroupés), pour enregistrer chaque tournée dans son propre fichier PDF">
         📑 Un PDF par tournée
       </button>
+      <button class="btn-outline" id="btn-route-sheet" style="display:none" onclick="doRouteSheet()" title="Liste tronçon par tronçon (rue, distance, indication de direction, activité) — un PDF texte en plus des plans cartographiques">
+        📋 Feuille de route (PDF)
+      </button>
     </div>
   </div>
 
@@ -484,6 +510,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 
 <!-- Pages d'impression (injectées dynamiquement avant print) -->
 <div id="print-pages"></div>
+<div id="route-pages"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════
@@ -697,8 +724,9 @@ function goStep(n){
     const nextBtn=document.getElementById('btn-next');
     const printBtn=document.getElementById('btn-print');
     const printSepBtn=document.getElementById('btn-print-separate');
-    if(n===3){nextBtn.style.display='none';printBtn.style.display='block';printSepBtn.style.display='block';updatePrintSummary();}
-    else{nextBtn.style.display='block';printBtn.style.display='none';printSepBtn.style.display='none';}
+    const routeBtn=document.getElementById('btn-route-sheet');
+    if(n===3){nextBtn.style.display='none';printBtn.style.display='block';printSepBtn.style.display='block';routeBtn.style.display='block';updatePrintSummary();}
+    else{nextBtn.style.display='block';printBtn.style.display='none';printSepBtn.style.display='none';routeBtn.style.display='none';}
     document.getElementById('map-toolbar').style.display=n===2?'flex':'none';
     document.getElementById('seg-search').style.display=n===2?'flex':'none';
     if(n!==2)deactivatePlan();
@@ -1055,6 +1083,34 @@ function segmentLength(pts){
   let d=0;
   for(let i=1;i<pts.length;i++)d+=haversine(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
   return d;
+}
+// Cap compas (0°=Nord, 90°=Est) entre deux points — sert à déduire une indication de
+// virage pour la feuille de route, en comparant le cap de sortie d'un tronçon au cap
+// d'entrée du suivant.
+function bearingDeg(p1,p2){
+  const toRad=d=>d*Math.PI/180;
+  const φ1=toRad(p1[0]),φ2=toRad(p2[0]),Δλ=toRad(p2[1]-p1[1]);
+  const y=Math.sin(Δλ)*Math.cos(φ2);
+  const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+// Indication textuelle à partir de l'écart entre le cap de sortie du tronçon précédent
+// et le cap d'entrée de celui-ci — une heuristique simple (comme un roadbook), pas un
+// moteur de navigation : elle ne connaît pas le réseau routier réel, juste la géométrie
+// du tracé.
+function turnLabel(prevExitBearing,curEntryBearing){
+  if(prevExitBearing==null)return'Départ';
+  let diff=curEntryBearing-prevExitBearing;
+  diff=((diff+180)%360+360)%360-180; // normalisé sur [-180,180]
+  const abs=Math.abs(diff);
+  if(abs<20)return'Tout droit';
+  if(abs<45)return diff>0?'Légèrement à droite':'Légèrement à gauche';
+  if(abs<135)return diff>0?'Tourner à droite':'Tourner à gauche';
+  return'Faire demi-tour';
+}
+function fmtDist(m){
+  if(m>=1000)return(m/1000).toFixed(1).replace('.',',')+' km';
+  return Math.round(m)+' m';
 }
 // Nombre de tronçons qu'un plan peut accueillir selon la longueur LOCALE du tronçon :
 // courts (zone dense) → moins par page pour rester lisible ; longs (zone étendue) →
@@ -1984,6 +2040,58 @@ async function doPrintSeparate(){
     overlay.classList.remove('show');
     btnPrint.disabled=false;btnSep.disabled=false;
   }
+}
+
+// Feuille de route : une liste tronçon par tronçon (rue, distance, indication de
+// direction, activité) en complément des plans cartographiques — pas de carte, donc pas
+// besoin d'attendre des tuiles : construction et impression sont synchrones.
+function buildRouteSheetPlan(tournee,plan){
+  const tRecs=tournee.RECS;
+  const mapRecs=[...plan.segIds].sort((a,b)=>parseInt(a)-parseInt(b))
+    .map(id=>tRecs.find(r=>r.idtroncon===id)).filter(Boolean);
+  let prevExitBearing=null;
+  const rowsHTML=mapRecs.map(r=>{
+    const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
+    const pts=r.points;
+    const entryBearing=pts.length>=2?bearingDeg(pts[0],pts[1]):null;
+    const exitBearing=pts.length>=2?bearingDeg(pts[pts.length-2],pts[pts.length-1]):entryBearing;
+    const dir=entryBearing==null?'Départ':turnLabel(prevExitBearing,entryBearing);
+    prevExitBearing=exitBearing;
+    const street=r.adresse||'—';
+    return `
+<div class="rs-row">
+  <div class="rs-num" style="background:${cfg.color}">${r.idtroncon}</div>
+  <div class="rs-body">
+    <div class="rs-street">${street}</div>
+    <div class="rs-meta"><span class="rs-dir">${dir}</span><span>·</span><span>${fmtDist(segmentLength(pts))}</span><span>·</span><span>${r.nomactiv}</span></div>
+  </div>
+</div>`;
+  }).join('');
+  return `
+<div class="rs-plan">
+  <div class="rs-header">
+    <div class="rs-swatch" style="background:${plan.color}"></div>
+    <div>
+      <div class="rs-plan-name">${plan.name}</div>
+      <div class="rs-sub">Feuille de route — ${tournee.circuit}${tournee.commune?' · '+tournee.commune:''}</div>
+    </div>
+  </div>
+  <div class="rs-cols">${rowsHTML}</div>
+</div>`;
+}
+
+async function doRouteSheet(){
+  const jobs=buildPrintJobs();
+  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
+  const originalTitle=document.title;
+  document.getElementById('print-pages').innerHTML=''; // exclusivité avec les plans cartographiques
+  const routeContainer=document.getElementById('route-pages');
+  routeContainer.innerHTML=jobs.map(j=>buildRouteSheetPlan(j.tournee,j.plan)).join('');
+  routeContainer.style.display='block';
+
+  document.title=printBatchTitle()+' - feuille de route';
+  window.print();
+  setTimeout(()=>{routeContainer.style.display='none';routeContainer.innerHTML='';document.title=originalTitle;},2000);
 }
 
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
