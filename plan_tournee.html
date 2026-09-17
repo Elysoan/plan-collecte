@@ -424,8 +424,8 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
       <button class="btn-outline" id="btn-print" style="display:none" onclick="doPrint()">
         🖨 Imprimer / Enregistrer en PDF
       </button>
-      <button class="btn-outline" id="btn-print-separate" style="display:none" onclick="doPrintSeparate()" title="Ouvre la boîte d'impression une fois par plan, pour enregistrer chacun dans son propre fichier PDF">
-        📑 Un PDF par plan
+      <button class="btn-outline" id="btn-print-separate" style="display:none" onclick="doPrintSeparate()" title="Ouvre la boîte d'impression une fois par tournée (tous ses plans regroupés), pour enregistrer chaque tournée dans son propre fichier PDF">
+        📑 Un PDF par tournée
       </button>
     </div>
   </div>
@@ -1721,14 +1721,19 @@ async function doPrint(){
   setTimeout(()=>{container.innerHTML='';},2000);
 }
 
-// Un fichier PDF par plan : impossible de scinder un unique export PDF en plusieurs
-// fichiers depuis le navigateur, donc on ouvre la boîte d'impression une fois PAR PLAN —
-// à chaque fermeture (impression, enregistrement ou annulation), on enchaîne sur le
-// suivant. Fastidieux si le lot est gros, mais c'est la seule voie sans réintroduire
-// jsPDF/html2canvas (abandonné plus tôt à cause du canvas "taint" par les tuiles de fond).
+// Un fichier PDF par CIRCUIT (tournée) : impossible de scinder un unique export PDF en
+// plusieurs fichiers depuis le navigateur, donc on ouvre la boîte d'impression une fois
+// PAR TOURNÉE (tous ses plans actifs regroupés, comme le fait l'impression groupée mais
+// tournée par tournée) — à chaque fermeture (impression, enregistrement ou annulation),
+// on enchaîne sur la suivante. C'est la seule voie sans réintroduire jsPDF/html2canvas
+// (abandonné plus tôt à cause du canvas "taint" par les tuiles de fond).
 async function doPrintSeparate(){
-  const jobs=buildPrintJobs();
-  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
+  const groups=TOURNEES.map(t=>{
+    const activePlans=t.PLANS.filter(p=>p.segIds.size>0);
+    return{tournee:t,jobs:activePlans.map((plan,idx)=>({tournee:t,plan,pageNum:idx+1,pageTotal:activePlans.length}))};
+  }).filter(gr=>gr.jobs.length);
+  syncCurrentTournee();
+  if(!groups.length){alert('Aucun tronçon dans les plans.');return;}
   const originalTitle=document.title;
   const container=document.getElementById('print-pages');
   const overlay=document.getElementById('gen-overlay');
@@ -1741,17 +1746,19 @@ async function doPrintSeparate(){
     document.getElementById('gen-prog').style.width='10%';
     const ctx=await preparePrintContext();
 
-    for(let i=0;i<jobs.length;i++){
-      const {tournee,plan}=jobs[i];
-      overlay.classList.add('show');
-      document.getElementById('gen-msg').textContent=`Plan ${i+1}/${jobs.length} — ${tournee.circuit} · ${plan.name}…`;
-      document.getElementById('gen-prog').style.width=(10+Math.round(i/jobs.length*80))+'%';
+    for(let g=0;g<groups.length;g++){
+      const {tournee,jobs}=groups[g];
       container.innerHTML='';
-      await buildPrintPage(jobs[i],0,ctx);
+      for(let i=0;i<jobs.length;i++){
+        overlay.classList.add('show');
+        document.getElementById('gen-msg').textContent=`Tournée ${g+1}/${groups.length} — ${tournee.circuit} (page ${i+1}/${jobs.length})…`;
+        document.getElementById('gen-prog').style.width=(10+Math.round((g+i/jobs.length)/groups.length*80))+'%';
+        await buildPrintPage(jobs[i],i,ctx);
+      }
       // Le nom suggéré par la boîte "Enregistrer en PDF" du navigateur reprend le titre
-      // de la page : un nom de fichier par plan, plutôt qu'un titre générique.
-      document.title=`${tournee.circuit} - ${plan.name}`.replace(/[\\/:*?"<>|]/g,'-');
-      document.getElementById('gen-msg').textContent=`Plan ${i+1}/${jobs.length} — enregistrez le PDF puis fermez la boîte pour continuer…`;
+      // de la page : un nom de fichier par tournée, plutôt qu'un titre générique.
+      document.title=tournee.circuit.replace(/[\\/:*?"<>|]/g,'-');
+      document.getElementById('gen-msg').textContent=`Tournée ${g+1}/${groups.length} — enregistrez le PDF puis fermez la boîte pour continuer…`;
       overlay.classList.remove('show');
       const afterPrint=waitAfterPrint();
       window.print();
