@@ -66,6 +66,13 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .fg{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
 .fg.full{grid-template-columns:1fr;}
 .f label{font-size:.7rem;color:var(--muted);display:block;margin-bottom:3px;}
+.tournee-info-card{border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden;}
+.tournee-info-head{display:flex;align-items:center;gap:6px;padding:8px 10px;cursor:pointer;background:var(--bg);font-size:.8rem;}
+.tournee-info-head:hover{background:var(--accent-bg);}
+.tournee-info-caret{color:var(--muted);flex-shrink:0;width:10px;}
+.tournee-info-name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tournee-info-commune{color:var(--muted);margin-left:auto;flex-shrink:0;font-size:.72rem;}
+.tournee-info-body{padding:10px;border-top:1px solid var(--border);}
 .f input,.f select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:.8rem;color:var(--text);background:var(--surface);transition:border-color .15s;}
 .f input:focus,.f select:focus{outline:none;border-color:var(--accent);}
 
@@ -375,14 +382,13 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
     <!-- ── Panel 3 : Infos & Export ── -->
     <div class="sb-panel" id="panel-3">
       <div class="sec-title" style="margin-bottom:10px;">Informations tournée</div>
-      <!-- Plusieurs tournées : chacune a son propre nom/commune (auto-détectés à l'import,
-           mais modifiables ici même, tournée par tournée, sans changer d'onglet). -->
+      <!-- Plusieurs tournées : toutes leurs informations (nom, commune, période, jour,
+           fréquence, flux, type de semaine, saison) sont modifiables ici même, tournée
+           par tournée, sans changer d'onglet — un accordéon par tournée. -->
       <div id="tournee-info-list" style="display:none;margin-bottom:14px;"></div>
       <div class="fg" id="tournee-info-single" style="margin-bottom:14px;">
         <div class="f"><label>Tournée</label><input id="f-tournee"></div>
         <div class="f"><label>Commune</label><input id="f-commune"></div>
-      </div>
-      <div class="fg" style="margin-bottom:14px;">
         <div class="f"><label>Période</label><input id="f-periode" placeholder="Matin"></div>
         <div class="f"><label>Jour</label><input id="f-jour" placeholder="Lundi"></div>
         <div class="f"><label>Fréquence</label><input id="f-freq" placeholder="C0.5"></div>
@@ -589,7 +595,7 @@ function saveSession(){
     for(const id of FIELD_IDS)fields[id]=document.getElementById(id)?.value||'';
     const data={
       v:2, CUR_STEP, OFFSET_PX, fields, CUR_TOURNEE,
-      TOURNEES:TOURNEES.map(t=>({circuit:t.circuit,shortName:t.shortName,commune:t.commune,PCTR:t.PCTR,RECS:t.RECS,PLANS:t.PLANS.map(p=>({...p,segIds:[...p.segIds]}))})),
+      TOURNEES:TOURNEES.map(t=>({circuit:t.circuit,shortName:t.shortName,commune:t.commune,fields:t.fields,PCTR:t.PCTR,RECS:t.RECS,PLANS:t.PLANS.map(p=>({...p,segIds:[...p.segIds]}))})),
       opts:{
         tile:document.getElementById('opt-tile').value,
         offset:document.getElementById('opt-offset').value,
@@ -719,6 +725,19 @@ function syncCurrentTournee(){
   t.RECS=RECS;t.PLANS=PLANS;t.PCTR=PCTR;
   t.circuit=document.getElementById('f-tournee').value||CIRCUIT;
   t.commune=document.getElementById('f-commune').value||t.commune;
+  if(TOURNEES.length<=1){
+    // En mode simple, les champs partagés (période/jour/…) sont la seule saisie
+    // possible : on les reflète dans fields pour qu'un import ultérieur (qui en hérite
+    // par défaut) et l'impression partent de ces valeurs plutôt que de champs vides.
+    t.fields={
+      periode:document.getElementById('f-periode')?.value||'',
+      jour:document.getElementById('f-jour')?.value||'',
+      freq:document.getElementById('f-freq')?.value||'',
+      flux:document.getElementById('f-flux')?.value||'',
+      semaine:document.getElementById('f-semaine')?.value||'',
+      saison:document.getElementById('f-saison')?.value||'',
+    };
+  }
 }
 // Bascule les globales sur la tournée idx (sans persister l'ancienne — appelant responsable)
 function activateTournee(idx){
@@ -752,6 +771,11 @@ function renderTourneeTabs(){
 
 async function loadFiles(files){
   const startIdx=TOURNEES.length;
+  syncCurrentTournee(); // reflète les derniers champs saisis avant d'en hériter ci-dessous
+  // Les tournées déjà présentes dans le lot partagent en général période/jour/fréquence/
+  // flux (import du même jour) — les nouvelles en héritent par défaut plutôt que de
+  // repartir de champs vides ; l'utilisateur ajuste ensuite au cas par cas si besoin.
+  const inheritedFields=TOURNEES[0]?.fields?{...TOURNEES[0].fields}:emptyTourneeFields();
   for(const file of files){
     try{
       const zip=await JSZip.loadAsync(file);
@@ -775,16 +799,18 @@ async function loadFiles(files){
         const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
         const recs=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
         if(!recs.length){alert(`${file.name} : ${label} — aucun tronçon exploitable, ignoré.`);continue;}
-        // "circuit" (long) sert à l'affichage sur les plans (ex. "Ecommoy Campagne 70% CS",
-        // issu du champ nomcircuit) ; "shortName" (court) sert aux noms de fichiers PDF —
-        // dérivé du nom du .shp lui-même (ex. "circuit_OBB1111CS" → "OBB1111CS"), qui suit
-        // en général une convention de code court même quand nomcircuit est une longue
-        // description.
+        // "shortName" (court, ex. "circuit_OBB1111CS" → "OBB1111CS") sert de valeur par
+        // défaut au champ "Tournée" ET au nom de fichier PDF — nomcircuit est souvent une
+        // longue description ("Ecommoy Campagne 70% CS"), peu pratique au quotidien ;
+        // l'utilisateur peut toujours saisir la description complète s'il la préfère,
+        // le champ reste éditable.
         const shpBase=label.replace(/\.shp$/i,'');
+        const shortName=shpBase.replace(/^circuit[_-]?/i,'')||shpBase;
         TOURNEES.push({
-          circuit:recs[0]?.nomcircuit||shpBase,
-          shortName:shpBase.replace(/^circuit[_-]?/i,'')||shpBase,
+          circuit:shortName||recs[0]?.nomcircuit||'Tournée',
+          shortName,
           commune:guessCommune(recs),RECS:recs,PLANS:[],PCTR:0,
+          fields:{...inheritedFields},
         });
       }
     }catch(e){alert(`${file.name} : erreur — ${e.message}`);console.error(e);}
@@ -1479,9 +1505,15 @@ function refreshColors(){
 // ═══════════════════════════════════════════════════════
 // RÉCAPITULATIF AVANT EXPORT
 // ═══════════════════════════════════════════════════════
-// Un champ Tournée/Commune par tournée du lot, éditable directement, sans changer
-// d'onglet — sinon seule la tournée actuellement active (activateTournee) est éditable
-// via les champs f-tournee/f-commune classiques.
+// Toutes les informations d'une tournée (nom, commune, période, jour, fréquence, flux,
+// type de semaine, saison) sont éditables directement, sans changer d'onglet — un
+// accordéon par tournée, replié par défaut pour rester lisible sur un gros lot.
+let TOURNEE_INFO_OPEN=new Set();
+function emptyTourneeFields(){return{periode:'',jour:'',freq:'',flux:'',semaine:'',saison:''};}
+function toggleTourneeInfo(i){
+  if(TOURNEE_INFO_OPEN.has(i))TOURNEE_INFO_OPEN.delete(i);else TOURNEE_INFO_OPEN.add(i);
+  renderTourneeInfoList();
+}
 function renderTourneeInfoList(){
   const listEl=document.getElementById('tournee-info-list');
   const singleEl=document.getElementById('tournee-info-single');
@@ -1494,11 +1526,35 @@ function renderTourneeInfoList(){
   singleEl.style.display='none';
   listEl.style.display='block';
   const esc=s=>(s||'').replace(/"/g,'&quot;');
-  listEl.innerHTML=TOURNEES.map((t,i)=>`
-<div class="fg" style="padding-bottom:8px;margin-bottom:8px;${i<TOURNEES.length-1?'border-bottom:1px solid var(--border);':''}">
-  <div class="f"><label>Tournée ${i+1}</label><input value="${esc(t.circuit)}" oninput="setTourneeField(${i},'circuit',this.value)"></div>
-  <div class="f"><label>Commune</label><input value="${esc(t.commune)}" oninput="setTourneeField(${i},'commune',this.value)"></div>
-</div>`).join('');
+  listEl.innerHTML=TOURNEES.map((t,i)=>{
+    const f=t.fields||(t.fields=emptyTourneeFields());
+    const open=TOURNEE_INFO_OPEN.has(i);
+    const opt=(v,label)=>`<option value="${v}"${f.semaine===v?' selected':''}>${label}</option>`;
+    return `
+<div class="tournee-info-card">
+  <div class="tournee-info-head" onclick="toggleTourneeInfo(${i})">
+    <span class="tournee-info-caret">${open?'▾':'▸'}</span>
+    <span class="tournee-info-name">${esc(t.circuit)||'Tournée '+(i+1)}</span>
+    <span class="tournee-info-commune">${esc(t.commune)}</span>
+  </div>
+  <div class="tournee-info-body" style="display:${open?'block':'none'}">
+    <div class="fg">
+      <div class="f"><label>Tournée</label><input value="${esc(t.circuit)}" oninput="setTourneeField(${i},'circuit',this.value)"></div>
+      <div class="f"><label>Commune</label><input value="${esc(t.commune)}" oninput="setTourneeField(${i},'commune',this.value)"></div>
+      <div class="f"><label>Période</label><input value="${esc(f.periode)}" placeholder="Matin" oninput="setTourneeInfoField(${i},'periode',this.value)"></div>
+      <div class="f"><label>Jour</label><input value="${esc(f.jour)}" placeholder="Lundi" oninput="setTourneeInfoField(${i},'jour',this.value)"></div>
+      <div class="f"><label>Fréquence</label><input value="${esc(f.freq)}" placeholder="C0.5" oninput="setTourneeInfoField(${i},'freq',this.value)"></div>
+      <div class="f"><label>Flux collecté</label><input value="${esc(f.flux)}" placeholder="OMCS" oninput="setTourneeInfoField(${i},'flux',this.value)"></div>
+      <div class="f"><label>Type semaine</label>
+        <select onchange="setTourneeInfoField(${i},'semaine',this.value)">
+          ${opt('','—')}${opt('Paire','Paire')}${opt('Impaire','Impaire')}${opt('Toutes','Toutes')}
+        </select>
+      </div>
+      <div class="f"><label>Saison</label><input value="${esc(f.saison)}" oninput="setTourneeInfoField(${i},'saison',this.value)"></div>
+    </div>
+  </div>
+</div>`;
+  }).join('');
 }
 function setTourneeField(i,field,val){
   const t=TOURNEES[i];if(!t)return;
@@ -1507,6 +1563,12 @@ function setTourneeField(i,field,val){
     if(field==='circuit'){CIRCUIT=val;document.getElementById('f-tournee').value=val;}
     if(field==='commune')document.getElementById('f-commune').value=val;
   }
+  scheduleSave();
+}
+function setTourneeInfoField(i,field,val){
+  const t=TOURNEES[i];if(!t)return;
+  if(!t.fields)t.fields=emptyTourneeFields();
+  t.fields[field]=val;
   scheduleSave();
 }
 
@@ -1668,6 +1730,7 @@ async function buildPrintPage(job,domIdx,ctx){
   const tRecs=tournee.RECS;
   const tCircuit=tournee.circuit||g('f-tournee')||CIRCUIT;
   const tCommune=tournee.commune||g('f-commune');
+  const tf=tournee.fields||{};
   const i=domIdx;
 
   {
@@ -1724,13 +1787,13 @@ async function buildPrintPage(job,domIdx,ctx){
     <div class="pp-info-grid">
       <div>Tournée : <strong>${tCircuit}</strong></div>
       <div>Commune : <strong>${tCommune}</strong></div>
-      <div>Période : <strong>${g('f-periode')}</strong></div>
-      <div>Fréquence : <strong>${g('f-freq')}</strong></div>
-      <div>Saison : <strong>${g('f-saison')}</strong></div>
+      <div>Période : <strong>${tf.periode||g('f-periode')}</strong></div>
+      <div>Fréquence : <strong>${tf.freq||g('f-freq')}</strong></div>
+      <div>Saison : <strong>${tf.saison||g('f-saison')}</strong></div>
       <div>Date d'édition : <strong>${today}</strong></div>
-      <div>Type semaine : <strong>${g('f-semaine')}</strong></div>
-      <div>Jour : <strong>${g('f-jour')}</strong></div>
-      <div>Flux collecté : <strong>${g('f-flux')}</strong></div>
+      <div>Type semaine : <strong>${tf.semaine||g('f-semaine')}</strong></div>
+      <div>Jour : <strong>${tf.jour||g('f-jour')}</strong></div>
+      <div>Flux collecté : <strong>${tf.flux||g('f-flux')}</strong></div>
     </div>
   </div>
   <div class="pp-legend">
