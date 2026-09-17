@@ -13,7 +13,7 @@
   --bg:#f4f5f7;--surface:#fff;--border:#e0e4eb;--text:#1c2333;
   --muted:#7a8499;--accent:#1a56db;--accent-bg:#ebf0fd;
   --blue:#0078be;--navy:#005a9e;
-  --c-bilat:#e07b00;--c-droite:#1a6e3c;--c-marche:#9b59b6;--c-hlp:#444;
+  --c-bilat:#c0392b;--c-droite:#1a6e3c;--c-marche:#9b59b6;--c-hlp:#444;
   --r:8px;--shadow:0 2px 8px rgba(0,0,0,.1);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -486,7 +486,7 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 // CONFIG
 // ═══════════════════════════════════════════════════════
 const ACT = {
-  'Collecte bilatérale': {color:'#e07b00',dash:false,w:4,offset:true},
+  'Collecte bilatérale': {color:'#c0392b',dash:false,w:4,offset:true},
   'Collecte à droite':   {color:'#1a6e3c',dash:false,w:4,offset:true},
   'Marche arrière':      {color:'#9b59b6',dash:false,w:4,offset:true},
   'Haut le pied':        {color:'#444',   dash:true, w:3,offset:true},
@@ -863,7 +863,7 @@ function readDBF(buf){
 // ═══════════════════════════════════════════════════════
 function showInfo(recs){
   const cnt={};for(const r of recs)cnt[r.nomactiv]=(cnt[r.nomactiv]||0)+1;
-  const cls={'Collecte bilatérale':'background:#e07b00','Collecte à droite':'background:#1a6e3c','Marche arrière':'background:#9b59b6','Haut le pied':'background:#555'};
+  const cls={'Collecte bilatérale':'background:#c0392b','Collecte à droite':'background:#1a6e3c','Marche arrière':'background:#9b59b6','Haut le pied':'background:#555'};
   const pills=Object.entries(cnt).map(([a,c])=>`<span class="pill" style="${cls[a]||'background:#555'}">${a.replace('Collecte ','')} · ${c}</span>`).join('');
   const ids=recs.map(r=>parseInt(r.idtroncon)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
   const el=document.getElementById('info-box');
@@ -1626,7 +1626,7 @@ async function buildPrintPage(job,domIdx,ctx){
 
     // Légende HTML
     const legDefs=[
-      ['Collecte bilatérale','#e07b00',false],
+      ['Collecte bilatérale','#c0392b',false],
       ['Collecte à droite','#1a6e3c',false],
       ['Marche arrière','#9b59b6',false],
       ['Haut le pied','#444',true],
