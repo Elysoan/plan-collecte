@@ -735,14 +735,26 @@ async function loadFiles(files){
   for(const file of files){
     try{
       const zip=await JSZip.loadAsync(file);
-      let shpE=null,dbfE=null;
-      zip.forEach((p,e)=>{const pl=p.toLowerCase();if(pl.endsWith('.shp'))shpE=e;if(pl.endsWith('.dbf'))dbfE=e;});
-      if(!shpE||!dbfE){alert(`${file.name} : le ZIP doit contenir un .shp et un .dbf — ignoré.`);continue;}
-      const [shpBuf,dbfBuf]=await Promise.all([shpE.async('arraybuffer'),dbfE.async('arraybuffer')]);
-      const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
-      const recs=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
-      if(!recs.length){alert(`${file.name} : aucun tronçon exploitable — ignoré.`);continue;}
-      TOURNEES.push({circuit:recs[0]?.nomcircuit||file.name.replace(/\.zip$/i,''),commune:guessCommune(recs),RECS:recs,PLANS:[],PCTR:0});
+      // Table des entrées indexée en minuscule : gère la casse (.SHP/.shp) et permet de
+      // retrouver le .dbf d'un .shp par son chemin, dossier par dossier.
+      const byLowerPath={};
+      zip.forEach((p,e)=>{byLowerPath[p.toLowerCase()]=e;});
+      const shpPaths=Object.keys(byLowerPath).filter(p=>p.endsWith('.shp'));
+      if(!shpPaths.length){alert(`${file.name} : aucun .shp trouvé dans le ZIP — ignoré.`);continue;}
+      // Un ZIP peut contenir plusieurs circuits, chacun dans son propre dossier (un couple
+      // .shp/.dbf par dossier) — chaque couple devient sa propre tournée, comme si le ZIP
+      // avait été plusieurs fichiers importés séparément.
+      for(const shpPath of shpPaths){
+        const base=shpPath.slice(0,-4);
+        const shpE=byLowerPath[shpPath], dbfE=byLowerPath[base+'.dbf'];
+        const label=shpPath.split('/').pop();
+        if(!dbfE){alert(`${file.name} : .dbf manquant pour ${label} — circuit ignoré.`);continue;}
+        const [shpBuf,dbfBuf]=await Promise.all([shpE.async('arraybuffer'),dbfE.async('arraybuffer')]);
+        const attrs=readDBF(dbfBuf), geoms=readSHP(shpBuf);
+        const recs=attrs.map((a,i)=>({...a,points:(geoms[i]||[]).map(([lon,lat])=>[lat,lon])})).filter(r=>r.points.length>=2);
+        if(!recs.length){alert(`${file.name} : ${label} — aucun tronçon exploitable, ignoré.`);continue;}
+        TOURNEES.push({circuit:recs[0]?.nomcircuit||label.replace(/\.shp$/i,''),commune:guessCommune(recs),RECS:recs,PLANS:[],PCTR:0});
+      }
     }catch(e){alert(`${file.name} : erreur — ${e.message}`);console.error(e);}
   }
   if(TOURNEES.length===startIdx)return; // rien d'importable dans cette sélection
@@ -787,13 +799,23 @@ function readSHP(buf){
   return geoms;
 }
 
+// Certains exports (dont ceux observés en usage réel) encodent le texte du .dbf en
+// UTF-8 plutôt qu'en single-byte comme le veut le format DBF classique. On tente l'UTF-8
+// strict d'abord (fatal:true — lève une erreur si ce n'en est pas), et on ne retombe sur
+// Windows-1252 (accents 0x80-0x9F) que si ça échoue : un round-trip escape/decodeURIComponent
+// abîmait certains caractères accentués (ex. "É" en UTF-8 → "Ã‰" au lieu d'être corrigé).
+const DBF_UTF8=new TextDecoder('utf-8',{fatal:true});
+const DBF_LATIN1=new TextDecoder('windows-1252');
+function decodeDBFText(bytes){
+  try{return DBF_UTF8.decode(bytes);}catch(e){return DBF_LATIN1.decode(bytes);}
+}
 function readDBF(buf){
   const v=new DataView(buf),n=v.getInt32(4,true),hs=v.getInt16(8,true),rs=v.getInt16(10,true);
-  const dec=new TextDecoder('iso-8859-1'),fields=[];
+  const fields=[];
   let off=32;
   while(off<hs-1&&off+32<=buf.byteLength){
     const raw=new Uint8Array(buf,off,11);let e=raw.indexOf(0);if(e<0)e=11;
-    const name=dec.decode(raw.slice(0,e));const len=v.getUint8(off+16);
+    const name=decodeDBFText(raw.slice(0,e));const len=v.getUint8(off+16);
     fields.push({name:name||'_',len});off+=32;if(v.getUint8(off)===0x0D)break;
   }
   const recs=[];
@@ -801,7 +823,7 @@ function readDBF(buf){
     let fo=hs+i*rs;if(fo+rs>buf.byteLength)break;
     if(v.getUint8(fo)===0x2A)continue;fo++;
     const rec={};
-    for(const f of fields){let val=dec.decode(new Uint8Array(buf,fo,f.len)).trim();try{val=decodeURIComponent(escape(val));}catch(e){}rec[f.name]=val;fo+=f.len;}
+    for(const f of fields){const val=decodeDBFText(new Uint8Array(buf,fo,f.len)).trim();rec[f.name]=val;fo+=f.len;}
     recs.push(rec);
   }
   return recs;
