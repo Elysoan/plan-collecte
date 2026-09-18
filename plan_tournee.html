@@ -868,6 +868,18 @@ function guessCommune(recs){
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
   return top?top[0]:'';
 }
+// Un circuit traverse souvent plusieurs communes, et un plan (sous-zone du circuit) peut
+// lui-même en couvrir plusieurs à la fois — les citer toutes est plus juste que de ne
+// garder que la plus fréquente. Au-delà de 3, les citer toutes deviendrait juste du bruit
+// (cas d'un plan "vue d'ensemble" qui couvre tout le circuit) : on retombe alors sur la
+// commune dominante seule.
+function planCommuneLabel(recs){
+  const cnt={};
+  for(const r of recs)if(r.commune)cnt[r.commune]=(cnt[r.commune]||0)+1;
+  const communes=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+  if(!communes.length)return'';
+  return communes.length<=3?communes.join(' / '):communes[0];
+}
 
 function readSHP(buf){
   const v=new DataView(buf),fl=v.getInt32(24,false)*2,geoms=[];
@@ -1788,7 +1800,6 @@ async function buildPrintPage(job,domIdx,ctx){
   const {g,today,tileKey,tileUrl,showLabels,showArrows}=ctx;
   const tRecs=tournee.RECS;
   const tCircuit=tournee.circuit||g('f-tournee')||CIRCUIT;
-  const tCommune=tournee.commune||g('f-commune');
   const tf=tournee.fields||{};
   const i=domIdx;
 
@@ -1798,6 +1809,11 @@ async function buildPrintPage(job,domIdx,ctx){
     // Collect recs du plan
     const mapRecs=tRecs.filter(r=>plan.segIds.has(r.idtroncon));
     const presentActs=[...new Set(mapRecs.map(r=>r.nomactiv))];
+    // Commune PROPRE à ce plan (un circuit peut traverser plusieurs communes — chaque
+    // plan n'en couvre souvent qu'une partie) plutôt que la commune dominante de toute
+    // la tournée, sinon tous les plans affichent la même commune même quand leurs
+    // tronçons sont ailleurs.
+    const tCommune=planCommuneLabel(mapRecs)||tournee.commune||g('f-commune');
 
     // Légende HTML — un style par type (plein/zigzag/pointillé), flèche sur tous comme
     // dans la légende de référence.
