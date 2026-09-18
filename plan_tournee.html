@@ -2087,24 +2087,27 @@ function tourneeRouteRecs(tournee){
 // besoin d'attendre des tuiles : construction et impression sont synchrones.
 function buildRouteSheetTournee(tournee){
   const recs=tourneeRouteRecs(tournee);
-  let prevPoint=null,prevExitBearing=null;
+  let prevPoint=null,prevNetBearing=null;
   const rowsHTML=recs.map(r=>{
     const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
     let pts=r.points;
     // Un tracé shapefile ne garantit pas que ses points soient dans le sens de
     // circulation réel (chaque tronçon est digitalisé indépendamment). On réoriente
     // donc le tronçon courant selon l'extrémité la plus proche du point de sortie du
-    // précédent, sinon les caps d'entrée/sortie — et donc les virages détectés — sont
-    // faux dès qu'un tronçon est stocké "à l'envers".
+    // précédent, sinon les caps sont faux dès qu'un tronçon est stocké "à l'envers".
     if(prevPoint&&pts.length>=2){
       const dStart=haversine(prevPoint[0],prevPoint[1],pts[0][0],pts[0][1]);
       const dEnd=haversine(prevPoint[0],prevPoint[1],pts[pts.length-1][0],pts[pts.length-1][1]);
       if(dEnd<dStart)pts=[...pts].slice().reverse();
     }
-    const entryBearing=pts.length>=2?bearingDeg(pts[0],pts[1]):null;
-    const exitBearing=pts.length>=2?bearingDeg(pts[pts.length-2],pts[pts.length-1]):entryBearing;
-    const dir=entryBearing==null?'Départ':turnLabel(prevExitBearing,entryBearing);
-    prevExitBearing=exitBearing;
+    // Cap "à vol d'oiseau" (premier point → dernier point du tronçon), pas juste les
+    // deux points d'extrémité : une route peut courber sensiblement SUR la longueur
+    // d'un même tronçon (elle garde son nom malgré le virage), et comparer seulement
+    // les tout premiers/derniers points ignorait ce virage — résultat, quasi tout
+    // apparaissait "tout droit" même sur un réseau routier qui tourne beaucoup.
+    const netBearing=pts.length>=2?bearingDeg(pts[0],pts[pts.length-1]):null;
+    const dir=(netBearing==null||prevNetBearing==null)?'Départ':turnLabel(prevNetBearing,netBearing);
+    prevNetBearing=netBearing;
     if(pts.length)prevPoint=pts[pts.length-1];
     const street=r.adresse||'—';
     return `
