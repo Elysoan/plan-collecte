@@ -2073,21 +2073,39 @@ async function doPrintSeparate(){
   }
 }
 
+// Tronçons d'une tournée pour la feuille de route : union de tous les plans actifs
+// (vue d'ensemble + zones, qui se recouvrent), dédupliquée et triée par identifiant —
+// un seul parcours global par tournée, pas un doublon par zone cartographique.
+function tourneeRouteRecs(tournee){
+  const ids=new Set();
+  for(const p of tournee.PLANS)if(p.segIds.size>0)for(const id of p.segIds)ids.add(id);
+  return [...ids].sort((a,b)=>parseInt(a)-parseInt(b)).map(id=>tournee.RECS.find(r=>r.idtroncon===id)).filter(Boolean);
+}
+
 // Feuille de route : une liste tronçon par tronçon (rue, distance, indication de
 // direction, activité) en complément des plans cartographiques — pas de carte, donc pas
 // besoin d'attendre des tuiles : construction et impression sont synchrones.
-function buildRouteSheetPlan(tournee,plan){
-  const tRecs=tournee.RECS;
-  const mapRecs=[...plan.segIds].sort((a,b)=>parseInt(a)-parseInt(b))
-    .map(id=>tRecs.find(r=>r.idtroncon===id)).filter(Boolean);
-  let prevExitBearing=null;
-  const rowsHTML=mapRecs.map(r=>{
+function buildRouteSheetTournee(tournee){
+  const recs=tourneeRouteRecs(tournee);
+  let prevPoint=null,prevExitBearing=null;
+  const rowsHTML=recs.map(r=>{
     const cfg=ACT[r.nomactiv]||ACT['Haut le pied'];
-    const pts=r.points;
+    let pts=r.points;
+    // Un tracé shapefile ne garantit pas que ses points soient dans le sens de
+    // circulation réel (chaque tronçon est digitalisé indépendamment). On réoriente
+    // donc le tronçon courant selon l'extrémité la plus proche du point de sortie du
+    // précédent, sinon les caps d'entrée/sortie — et donc les virages détectés — sont
+    // faux dès qu'un tronçon est stocké "à l'envers".
+    if(prevPoint&&pts.length>=2){
+      const dStart=haversine(prevPoint[0],prevPoint[1],pts[0][0],pts[0][1]);
+      const dEnd=haversine(prevPoint[0],prevPoint[1],pts[pts.length-1][0],pts[pts.length-1][1]);
+      if(dEnd<dStart)pts=[...pts].slice().reverse();
+    }
     const entryBearing=pts.length>=2?bearingDeg(pts[0],pts[1]):null;
     const exitBearing=pts.length>=2?bearingDeg(pts[pts.length-2],pts[pts.length-1]):entryBearing;
     const dir=entryBearing==null?'Départ':turnLabel(prevExitBearing,entryBearing);
     prevExitBearing=exitBearing;
+    if(pts.length)prevPoint=pts[pts.length-1];
     const street=r.adresse||'—';
     return `
 <div class="rs-row">
@@ -2095,7 +2113,7 @@ function buildRouteSheetPlan(tournee,plan){
   <div class="rs-dir-icon" title="${dir}">${dirIcon(dir)}</div>
   <div class="rs-body">
     <div class="rs-street">${street}</div>
-    <div class="rs-meta"><span>${fmtDist(segmentLength(pts))}</span><span>·</span><span>${r.nomactiv}</span></div>
+    <div class="rs-meta"><span>${fmtDist(segmentLength(r.points))}</span><span>·</span><span>${r.nomactiv}</span></div>
   </div>
 </div>`;
   }).join('');
@@ -2104,9 +2122,8 @@ function buildRouteSheetPlan(tournee,plan){
   return `
 <div class="rs-plan">
   <div class="rs-header">
-    <div class="rs-swatch" style="background:${plan.color}"></div>
     <div>
-      <div class="rs-plan-name">${plan.name}</div>
+      <div class="rs-plan-name">${tournee.shortName||tournee.circuit}</div>
       <div class="rs-sub">Feuille de route — ${tournee.circuit}${tournee.commune?' · '+tournee.commune:''}</div>
     </div>
   </div>
@@ -2116,12 +2133,13 @@ function buildRouteSheetPlan(tournee,plan){
 }
 
 async function doRouteSheet(){
-  const jobs=buildPrintJobs();
-  if(!jobs.length){alert('Aucun tronçon dans les plans.');return;}
+  syncCurrentTournee();
+  const tournees=TOURNEES.filter(t=>t.PLANS.some(p=>p.segIds.size>0));
+  if(!tournees.length){alert('Aucun tronçon dans les plans.');return;}
   const originalTitle=document.title;
   document.getElementById('print-pages').innerHTML=''; // exclusivité avec les plans cartographiques
   const routeContainer=document.getElementById('route-pages');
-  routeContainer.innerHTML=jobs.map(j=>buildRouteSheetPlan(j.tournee,j.plan)).join('');
+  routeContainer.innerHTML=tournees.map(t=>buildRouteSheetTournee(t)).join('');
   routeContainer.style.display='block';
 
   document.title=printBatchTitle()+' - feuille de route';
