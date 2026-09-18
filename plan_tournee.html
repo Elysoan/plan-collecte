@@ -221,12 +221,16 @@ header p{font-size:.72rem;opacity:.65;margin-left:auto;}
 .rs-header .rs-swatch{width:8mm;height:8mm;border-radius:3px;border:1.5px solid rgba(255,255,255,.7);flex-shrink:0;}
 .rs-header .rs-plan-name{font-size:13pt;font-weight:800;line-height:1.15;}
 .rs-header .rs-sub{font-size:8pt;opacity:.85;letter-spacing:.03em;text-transform:uppercase;}
-.rs-cols{columns:3;column-gap:8mm;}
-.rs-row{display:flex;align-items:center;gap:2mm;break-inside:avoid-column;margin-bottom:1.6mm;padding:1mm 0;border-bottom:1px solid #eee;font-size:8pt;}
-.rs-num{flex-shrink:0;min-width:7mm;height:5mm;border-radius:3px;color:white;font-weight:800;font-size:7.5pt;display:flex;align-items:center;justify-content:center;padding:0 1mm;}
+.rs-legend{display:flex;flex-wrap:wrap;gap:4mm;padding:2.5mm 1mm;margin-bottom:4mm;border-bottom:1px solid #d0d4da;}
+.rs-legend .rs-leg-item{display:flex;align-items:center;gap:1.5mm;font-size:7.5pt;color:#667085;}
+.rs-legend svg{width:14px;height:14px;}
+.rs-cols{columns:2;column-gap:12mm;}
+.rs-row{display:flex;align-items:center;gap:3mm;break-inside:avoid-column;margin-bottom:3.5mm;padding:1.5mm 0;border-bottom:1px solid #e2e2e2;font-size:9.5pt;}
+.rs-num{flex-shrink:0;min-width:9mm;height:7mm;border-radius:4px;color:white;font-weight:800;font-size:9pt;display:flex;align-items:center;justify-content:center;padding:0 1.5mm;}
+.rs-dir-icon{flex-shrink:0;width:9mm;height:9mm;display:flex;align-items:center;justify-content:center;}
 .rs-body{flex:1;min-width:0;}
-.rs-street{font-weight:600;color:#1c2333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.rs-meta{color:#667085;font-size:7.2pt;display:flex;gap:4px;flex-wrap:wrap;}
+.rs-street{font-weight:700;color:#1c2333;font-size:10.5pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rs-meta{color:#667085;font-size:8.3pt;display:flex;gap:5px;flex-wrap:wrap;margin-top:.5mm;}
 .rs-dir{color:#005a9e;font-weight:700;}
 
 /*
@@ -1123,6 +1127,17 @@ function turnLabel(prevExitBearing,curEntryBearing){
 function fmtDist(m){
   if(m>=1000)return(m/1000).toFixed(1).replace('.',',')+' km';
   return Math.round(m)+' m';
+}
+// Pictogramme de direction pour la feuille de route — une flèche à angle FIXE par
+// catégorie (pas l'angle réel du virage) : plus rapide à reconnaître d'un coup d'œil
+// qu'un angle continu, comme les pictos d'un roadbook. Le départ reprend le picto
+// drapeau déjà utilisé pour le point de départ sur le plan, pour une lecture cohérente.
+const DIR_ANGLES={'Tout droit':0,'Légèrement à droite':45,'Tourner à droite':90,
+  'Légèrement à gauche':-45,'Tourner à gauche':-90,'Faire demi-tour':180};
+function dirIcon(label){
+  if(label==='Départ')return flagSvg(DEP_COLOR,20);
+  const angle=DIR_ANGLES[label]??0;
+  return`<svg width="20" height="20" viewBox="0 0 24 24" style="display:block"><g transform="rotate(${angle} 12 12)"><polygon points="12,3 19,19 12,14.5 5,19" fill="#005a9e"/></g></svg>`;
 }
 // Nombre de tronçons qu'un plan peut accueillir selon la longueur LOCALE du tronçon :
 // courts (zone dense) → moins par page pour rester lisible ; longs (zone étendue) →
@@ -2077,12 +2092,15 @@ function buildRouteSheetPlan(tournee,plan){
     return `
 <div class="rs-row">
   <div class="rs-num" style="background:${cfg.color}">${r.idtroncon}</div>
+  <div class="rs-dir-icon" title="${dir}">${dirIcon(dir)}</div>
   <div class="rs-body">
     <div class="rs-street">${street}</div>
-    <div class="rs-meta"><span class="rs-dir">${dir}</span><span>·</span><span>${fmtDist(segmentLength(pts))}</span><span>·</span><span>${r.nomactiv}</span></div>
+    <div class="rs-meta"><span>${fmtDist(segmentLength(pts))}</span><span>·</span><span>${r.nomactiv}</span></div>
   </div>
 </div>`;
   }).join('');
+  const legendItems=['Départ','Tout droit','Tourner à gauche','Tourner à droite','Légèrement à gauche','Légèrement à droite','Faire demi-tour'];
+  const legendHTML=legendItems.map(l=>`<span class="rs-leg-item">${dirIcon(l)}${l}</span>`).join('');
   return `
 <div class="rs-plan">
   <div class="rs-header">
@@ -2092,6 +2110,7 @@ function buildRouteSheetPlan(tournee,plan){
       <div class="rs-sub">Feuille de route — ${tournee.circuit}${tournee.commune?' · '+tournee.commune:''}</div>
     </div>
   </div>
+  <div class="rs-legend">${legendHTML}</div>
   <div class="rs-cols">${rowsHTML}</div>
 </div>`;
 }
